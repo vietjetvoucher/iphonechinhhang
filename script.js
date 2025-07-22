@@ -1,4 +1,4 @@
-﻿import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -25,7 +25,7 @@ const auth = getAuth(app);
 
 let loggedInUser = null;
 let currentUserId = null;
-const ADMIN_EMAIL = 'dimensiongsv@gmail.com'; // Ensure this matches your admin email
+const ADMIN_EMAIL = 'mobilechinhhang.admin@gmail.com'; // Ensure this matches your admin email
 const DEFAULT_WAREHOUSE_ADDRESS = "194 Đ. Lê Duẩn, Khâm Thiên, Đống Đa, Hà Nội";
 
 let shopDataCache = {
