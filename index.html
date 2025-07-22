@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=0.5, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes">
+    <title id="page-title">HHmobile.com</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Firebase SDKs -->
+    <script type="module" src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js"></script>
+    <script type="module" src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fdf8f4;
+            color: #333;
+            transition: background-image 0.5s ease-in-out, background-color 0.5s ease-in-out;
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            background-color: #FFD100;
+            color: #333;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+        }
+        #shop-name-display {
+            color: #333;
+        }
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            transform: scale(0.9);
+            transition: transform 0.3s ease-in-out;
+            border-radius: 1.5rem;
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+        }
+        .price-original {
+            text-decoration: line-through;
+            color: #999;
+        }
+        .price-discounted {
+            color: #e53e3e;
+            font-weight: 600;
+        }
+        .order-status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            margin-bottom: 2rem;
+        }
+        .order-status-step {
+            flex: 1;
+            text-align: center;
+            padding: 0.4rem 0;
+            border-bottom: 3px solid #ccc;
+            color: #999;
+            font-weight: 500;
+            position: relative;
+            transition: all 0.3s ease-in-out;
+        }
+        .order-status-step.active {
+            border-color: #4CAF50;
+            color: #4CAF50;
+        }
+        .order-status-step::after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+            transition: all 0.3s ease-in-out;
+        }
+        .order-status-step.active::after {
+            border-bottom-color: #4CAF50;
+        }
+        .tab-button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .option-button.selected {
+            background-color: #d1e7dd;
+            border-color: #28a745;
+            color: #212529;
+            position: relative;
+        }
+        .option-button.selected::after {
+            content: "\f00c";
+            font-family: "Font Awesome 5 Free";
+            font-weight: 900;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            color: #28a745;
+            font-size: 0.8em;
+        }
+        .blurred-content {
+            filter: blur(5px);
+            transition: filter 0.2s ease-in-out;
+        }
+        .masked-input-wrapper {
+            position: relative;
+        }
+        .masked-input-wrapper .toggle-visibility-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            right: 0.5rem;
+            padding: 0 0.75rem;
+            display: flex;
+            align-items: center;
+            color: #6b7280;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+        }
+        .masked-input-wrapper textarea + .toggle-visibility-btn {
+            top: 0.5rem;
+            height: auto;
+        }
+        .out-of-stock {
+            color: #ef4444;
+            font-weight: 600;
+        }
+        .order-expandable-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .order-expandable-content.expanded {
+            max-height: 500px;
+            transition: max-height 0.5s ease-in;
+        }
+        .relative-container {
+            position: relative;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            font-size: 1.5rem;
+            color: #333;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes neon-glow {
+            0%, 100% {
+                text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #00f, 0 0 20px #00f, 0 0 25px #00f, 0 0 30px #00f, 0 0 35px #00f;
+            }
+            50% {
+                text-shadow: 0 0 2px #fff, 0 0 5px #fff, 0 0 8px #00f, 0 0 12px #00f, 0 0 15px #00f, 0 0 20px #00f, 0 0 25px #00f;
+            }
+        }
+        #shop-name-display.animated {
+            animation: neon-glow 1.5s ease-in-out infinite alternate;
+        }
+        .advertisement-banner {
+            background-color: #ffeb3b;
+            color: #e53935;
+            text-align: center;
+            padding: 10px 0;
+            font-weight: bold;
+            font-size: 1.2rem;
+            position: fixed;
+            top: 48px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 45;
+            overflow: hidden;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .advertisement-banner .content {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 15s linear infinite;
+        }
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        @keyframes flicker {
+            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+                opacity: 1;
+                text-shadow: 0 0 4px #ff0, 0 0 10px #ff0, 0 0 20px #ff0, 0 0 40px #ff0;
+            }
+            20%, 24%, 55% {
+                opacity: 0.5;
+                text-shadow: none;
+            }
+        }
+        .advertisement-banner.flicker .content {
+            animation: flicker 2s infinite alternate, marquee 15s linear infinite;
+        }
+        .header-search-input {
+            border-radius: 9999px;
+            border: 1px solid #ccc;
+            padding: 0.5rem 0.5rem 0.5rem 2.5rem;
+            width: 300px;
+            transition: width 0.3s ease-in-out;
+        }
+        .header-search-icon {
+            position: absolute;
+            left: 0.75rem;
+            color: #6b7280;
+        }
+        @media (max-width: 768px) {
+            .header-search-input {
+                width: 100%;
+            }
+        }
+        .star-rating .fa-star {
+            color: gold;
+        }
+        .warranty-package-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            background-color: #f8fafc;
+            transition: all 0.2s ease-in-out;
+        }
+        .warranty-package-card.selected-package {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+            box-shadow: 0 0 0 2px #bfdbfe;
+        }
+    </style>
+</head>
+<body class="bg-fdf8f4 text-333">
+
+    <header class="fixed top-0 left-0 right-0 z-40 bg-yellow-400 text-gray-800 shadow-lg py-6 px-6 md:px-6 lg:px-16 w-full flex items-center justify-between h-[75px]">
+        <div class="flex items-center">
+            <h1 id="shop-name-display" class="text-2xl lg:text-3xl font-bold rounded-full py-1 px-4 transition-all duration-300 ease-in-out hover:scale-105 cursor-pointer mr-4 lg:mr-6">
+                <i class="fas fa-mobile-alt mr-2 text-gray-700"></i><span class="text-gray-900">Thegioididong</span><span class="text-red-600">.com</span>
+            </h1>
+            <div class="relative flex items-center w-48 md:w-64 lg:w-80">
+                <input type="text" id="header-product-search-input" placeholder="Bạn tìm gì..." class="header-search-input focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                <i class="fas fa-search header-search-icon"></i>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4 lg:space-x-6">
+            <div id="cart-section" class="flex items-center">
+                <button id="open-cart-modal-btn" class="flex items-center text-gray-800 hover:text-gray-900 font-medium py-1 px-2 rounded-full transition-all duration-200 relative text-sm">
+                    <i class="fas fa-shopping-cart text-lg mr-2"></i>
+                    Giỏ hàng
+                    <span id="cart-count" class="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                </button>
+            </div>
+
+            <div id="shop-address-container" class="flex items-center text-xs text-gray-800 text-right">
+                <i class="fas fa-map-marker-alt text-base mr-1"></i>
+                <div class="flex flex-col">
+                    <span class="font-semibold mb-0.5">Đc:</span>
+                    <span id="shop-address-display" class="text-xs italic text-gray-700">Chưa cập nhật</span>
+                </div>
+                <button id="open-address-in-map-btn" class="ml-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs py-1 px-2 rounded-full transition-all duration-200">
+                    <i class="fas fa-external-link-alt mr-1"></i>
+                </button>
+            </div>
+            <div id="auth-section">
+                <button id="login-status-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-lg">Đăng nhập</button>
+            </div>
+        </div>
+    </header>
+
+    <div id="advertisement-banner-container" class="advertisement-banner hidden fixed top-20 left-190 right-0 z-30 mx-auto w-[95%] md:w-[85%] lg:w-[80%] xl:w-[70%] p-3 rounded-lg h-14">
+        <div class="content" id="advertisement-content"></div>
+    </div>
+
+
+    <div class="flex flex-1 w-full pt-28">
+        <aside class="fixed top-0 left-0 z-30 w-56 lg:w-64 h-full pt-20 bg-white p-4 rounded-xl shadow-lg overflow-y-auto border-r border-gray-200">
+            <h2 class="text-xl font-semibold mb-6 text-gray-800">MENU</h2>
+            <nav>
+                <ul class="space-y-3">
+                    <li><button id="show-products-btn" class="tab-button w-full text-left p-3 rounded-lg font-medium text-base transition-all duration-200 hover:bg-gray-100 active"><i class="fas fa-boxes mr-2"></i>Gian Hàng</button></li>
+                    <li><button id="show-created-orders-btn" class="tab-button w-full text-left p-3 rounded-lg font-medium text-base transition-all duration-200 hover:bg-gray-100"><i class="fas fa-clipboard-list mr-2"></i>Đơn Hàng Đã Tạo</button></li>
+                    <li><button id="show-shipping-orders-btn" class="tab-button w-full text-left p-3 rounded-lg font-medium text-base transition-all duration-200 hover:bg-gray-100"><i class="fas fa-truck mr-2"></i>Đơn Hàng Đang Vận Chuyển</button></li>
+                    <li><button id="show-delivered-orders-btn" class="tab-button w-full text-left p-3 rounded-lg font-medium text-base transition-all duration-200 hover:bg-gray-100"><i class="fas fa-check-circle mr-2"></i>Đơn Hàng Đã Giao</button></li>
+                    <li><button id="open-management-modal-btn" class="tab-button w-full text-left p-3 rounded-lg font-medium text-base transition-all duration-200 hover:bg-gray-100"><i class="fas fa-cogs mr-2"></i>Nhập Hàng</button></li>
+                    <li><button id="open-settings-modal-btn" class="tab-button w-full text-left p-3 rounded-lg font-medium text-base transition-all duration-200 hover:bg-gray-100"><i class="fas fa-cog mr-2"></i>Cài Đặt</button></li>
+                    <li><button id="open-shop-analytics-modal-btn" class="tab-button w-full text-left p-3 rounded-lg font-medium text-base transition-all duration-200 hover:bg-gray-100"><i class="fas fa-chart-line mr-2"></i>Thống Kê</button></li>
+                    <li><button id="open-profile-modal-btn" class="tab-button w-full text-left p-3 rounded-lg font-medium text-base transition-all duration-200 hover:bg-gray-100"><i class="fas fa-user mr-2"></i>Hồ sơ</button></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <section class="flex-1 ml-56 lg:ml-64 p-6 rounded-xl shadow-lg bg-white overflow-y-auto">
+            <div id="product-list-section" class="active-section">
+                <h2 class="text-3xl font-semibold mb-6 text-gray-800">Sản Phẩm Nổi Bật</h2>
+                <div id="product-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                </div>
+            </div>
+
+            <div id="created-orders-section" class="hidden">
+                <h2 class="text-3xl font-semibold mb-6 text-gray-800">Đơn Hàng Đã Tạo</h2>
+                <div class="mb-4 flex items-center gap-2">
+                    <input type="text" id="search-created-orders" placeholder="Tìm kiếm đơn hàng đã tạo..." class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="clear-search-created-orders" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition-all duration-200"><i class="fas fa-times"></i></button>
+                </div>
+                <div id="created-orders-list" class="space-y-4">
+                </div>
+            </div>
+
+            <div id="shipping-orders-section" class="hidden">
+                <h2 class="text-3xl font-semibold mb-6 text-gray-800">Đơn Hàng Đang Vận Chuyển</h2>
+                   <div class="mb-4 flex items-center gap-2">
+                    <input type="text" id="search-shipping-orders" placeholder="Tìm kiếm đơn hàng đang vận chuyển..." class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="clear-search-shipping-orders" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition-all duration-200"><i class="fas fa-times"></i></button>
+                </div>
+                <div id="shipping-orders-list" class="space-y-4">
+                </div>
+            </div>
+
+            <div id="delivered-orders-section" class="hidden">
+                <h2 class="text-3xl font-semibold mb-6 text-gray-800">Đơn Hàng Đã Giao</h2>
+                <div class="mb-4 flex items-center gap-2">
+                    <input type="text" id="search-delivered-orders" placeholder="Tìm kiếm đơn hàng đã giao..." class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="clear-search-delivered-orders" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition-all duration-200"><i class="fas fa-times"></i></button>
+                </div>
+                <div id="delivered-orders-list" class="space-y-4">
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div id="product-detail-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-4xl w-full flex flex-col md:flex-row gap-8 relative modal-content max-h-[85vh] overflow-y-auto">
+            <button id="close-product-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <div class="md:w-1/2 flex items-center justify-center p-4">
+                <img id="modal-product-image" src="" alt="Sản phẩm" class="max-h-96 w-auto object-contain mb-4 rounded-lg shadow-md">
+            </div>
+            <div class="md:w-1/2">
+                <h3 id="modal-product-name" class="text-3xl font-bold mb-4 text-gray-900"></h3>
+                <p class="text-xl font-semibold mb-2 text-gray-700">Giá gốc: <span id="modal-product-base-price" class="font-bold"></span></p>
+                <p class="text-xl font-semibold mb-2 text-gray-700">Tổng giá (chưa VAT): <span id="modal-product-price-display" class="price-original"></span></p>
+                <p class="text-xs font-semibold mb-2 text-gray-700">VAT (10% theo quy định nhà nước): <span id="modal-product-vat-display" class="font-bold text-red-600"></span></p>
+                <p id="modal-product-discount-display" class="text-xl font-semibold mb-4 price-discounted hidden"></p>
+
+                <div id="product-options" class="mb-6 space-y-4">
+                </div>
+
+                <p class="text-gray-600 mb-2">Số lượng đã bán: <span id="modal-product-sold">N/A</span></p>
+                <p class="text-gray-600 mb-4">Số lượng còn lại: <span id="modal-product-remaining">N/A</span></p>
+                <p id="modal-product-description" class="text-gray-700 mb-4 text-sm"></p>
+
+                <div class="mb-4 text-gray-700 text-sm">
+                    <p class="mb-1"><i class="fas fa-undo-alt mr-2 text-blue-500"></i> Chính sách đổi trả: <span class="font-semibold">15 Ngày</span></p>
+                    <p id="modal-shipping-cost-display"><i class="fas fa-shipping-fast mr-2 text-green-500"></i> Phí vận chuyển: <span class="font-semibold">Thanh toán khi nhận hàng (Miễn phi khi add voucher)</span></p>
+                </div>
+
+                <div class="mb-6">
+                    <label for="voucher-code" class="block text-gray-700 text-sm font-bold mb-2">Mã Voucher:</label>
+                    <div class="flex">
+                        <input type="text" id="voucher-code" class="shadow appearance-none border rounded-l-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập mã voucher">
+                        <button id="apply-voucher-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"><i class="fas fa-ticket-alt"></i> Áp Dụng</button>
+                    </div>
+                </div>
+
+                <div class="flex gap-4 mt-6">
+                    <button id="buy-now-detail-btn" class="bg-yellow-400 hover:bg-yellow-500 text-gray-800 font-bold py-3 px-6 rounded-lg flex-1 transition-all duration-200 shadow-lg"><i class="fas fa-dollar-sign mr-2"></i>Mua Ngay</button>
+                    <button id="add-to-cart-detail-btn" class="bg-yellow-400 hover:bg-yellow-500 text-gray-800 font-bold py-3 px-6 rounded-lg flex-1 transition-all duration-200 shadow-lg"><i class="fas fa-cart-plus mr-2"></i>Thêm vào giỏ hàng</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="order-creation-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-2xl w-full relative modal-content max-h-[85vh] overflow-y-auto">
+            <button id="close-order-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-3xl font-bold mb-6 text-gray-900 text-center">Tạo Đơn Hàng Mới</h3>
+
+            <div class="mb-6">
+                <p class="text-gray-700 text-lg mb-2">Mã đơn hàng: <span id="order-id-display" class="font-semibold text-blue-700"></span></p>
+                <div id="order-products-summary" class="border p-4 rounded-lg bg-gray-50 max-h-40 overflow-y-auto">
+                </div>
+            </div>
+
+            <form id="order-form" class="space-y-4">
+                <div>
+                    <label for="customer-name" class="block text-gray-700 text-lg font-bold mb-2">Họ tên:</label>
+                    <input type="text" id="customer-name" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div>
+                    <label for="customer-phone" class="block text-gray-700 text-lg font-bold mb-2">Số điện thoại:</label>
+                    <div class="masked-input-wrapper">
+                        <input type="tel" id="customer-phone" class="shadow appearance-none border rounded-lg w-full py-3 px-4 pr-12 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <button type="button" class="toggle-visibility-btn" data-target-id="customer-phone">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label for="customer-address" class="block text-gray-700 text-lg font-bold mb-2">Địa chỉ:</label>
+                    <div class="masked-input-wrapper">
+                        <textarea id="customer-address" class="shadow appearance-none border rounded-lg w-full py-3 px-4 pr-12 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none" required></textarea>
+                        <button type="button" class="toggle-visibility-btn" data-target-id="customer-address">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="order-location" class="block text-gray-700 text-lg font-bold mb-2">Vị trí kho hàng:</label>
+                    <input type="text" id="order-location" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Chi nhánh kho">
+                </div>
+                <div>
+                    <label for="estimated-delivery-date" class="block text-gray-700 text-lg font-bold mb-2">Ngày dự kiến nhận hàng:</label>
+                    <input type="date" id="estimated-delivery-date" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <button id="view-on-map-btn" type="button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg">
+                    <i class="fas fa-map-marked-alt mr-2"></i>Xem trên Bản Đồ
+                </button>
+
+                <div class="order-status-bar">
+                    <div class="order-status-step active" data-status="created">Tạo Đơn Hàng</div>
+                    <div class="order-status-step" data-status="shipping">Đang Vận Chuyển</div>
+                    <div class="order-status-step" data-status="delivered">Đã Giao Hàng</div>
+                </div>
+
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-check-square mr-2"></i>Xác Nhận Đơn Hàng</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="edit-shipping-order-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-xl w-full relative modal-content max-h-[85vh] overflow-y-auto">
+            <button id="close-edit-shipping-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-3xl font-bold mb-6 text-gray-900 text-center">Chỉnh Sửa Thông Tin Vận Chuyển</h3>
+            <p class="text-gray-700 text-lg mb-4">Đơn hàng: <span id="edit-shipping-order-id-display" class="font-semibold text-blue-700"></span></p>
+
+            <form id="edit-shipping-order-form" class="space-y-4">
+                <input type="hidden" id="edit-shipping-order-hidden-id">
+                <div>
+                    <label for="edit-order-location" class="block text-gray-700 text-lg font-bold mb-2">Vị trí hiện tại:</label>
+                    <input type="text" id="edit-order-location" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ví dụ: Đang ở kho Hồ Chí Minh">
+                </div>
+                <div>
+                    <label for="edit-estimated-delivery-date" class="block text-gray-700 text-lg font-bold mb-2">Ngày dự kiến nhận hàng:</label>
+                    <input type="date" id="edit-estimated-delivery-date" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-save mr-2"></i>Lưu Thay Đổi</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="cart-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-3xl w-full relative modal-content max-h-[85vh] overflow-y-auto">
+            <button id="close-cart-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-3xl font-bold mb-6 text-gray-900 text-center">Giỏ Hàng Của Bạn</h3>
+
+            <div class="mb-4 flex items-center gap-2">
+                <input type="text" id="search-cart-items" placeholder="Tìm kiếm sản phẩm trong giỏ hàng..." class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="clear-search-cart-items" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition-all duration-200"><i class="fas fa-times"></i></button>
+            </div>
+
+            <div id="cart-items-list" class="space-y-4 mb-6">
+                <p class="text-gray-500 italic text-center">Giỏ hàng trống.</p>
+            </div>
+
+            <div class="flex justify-between items-center border-t pt-4 border-gray-200">
+                <span class="text-xl font-bold text-gray-900">Tổng cộng: <span id="cart-total-amount">0 VND</span></span>
+                <button id="buy-all-cart-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg"><i class="fas fa-credit-card mr-2"></i>Mua Ngay Tất Cả</button>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="shop-management-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-4xl w-full relative overflow-y-auto max-h-[90vh] modal-content">
+            <button id="close-management-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-3xl font-bold mb-6 text-gray-900 text-center">Cửa Hàng</h3>
+
+            <div id="management-content-area" class="relative-container rounded-3xl p-4">
+                <div class="mb-8 border-b pb-6 border-gray-200">
+                    <h4 class="text-2xl font-semibold mb-4 text-gray-800">Quản lý Sản phẩm Hiện Có</h4>
+                    <div id="product-management-list" class="space-y-4">
+                        <p class="text-gray-500 italic">Đang tải danh sách sản phẩm...</p>
+                    </div>
+                </div>
+
+
+                <div class="mb-8 border-b pb-6 border-gray-200">
+                    <h4 id="add-edit-product-title" class="text-2xl font-semibold mb-4 text-gray-800">Thêm Mặt Hàng Mới</h4>
+                    <form id="add-edit-product-form" class="space-y-4">
+                        <input type="hidden" id="edit-product-id">
+                        <div>
+                            <label for="new-product-name" class="block text-gray-700 text-lg font-bold mb-2">Tên Sản Phẩm:</label>
+                            <input type="text" id="new-product-name" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+                        <div>
+                            <label for="new-product-base-price" class="block text-gray-700 text-lg font-bold mb-2">Giá gốc (VND):</label>
+                            <input type="number" id="new-product-base-price" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required min="0">
+                        </div>
+
+                        <div>
+                            <label for="new-product-image" class="block text-gray-700 text-lg font-bold mb-2">URL Hình Ảnh Chính (URL trực tiếp, bao gồm GitHub Raw hoặc Base64):</label>
+                            <div class="flex gap-2">
+                                <input type="url" id="new-product-image" class="shadow appearance-none border rounded-l-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://example.com/image.jpg hoặc chuỗi Base64 dài">
+                                <button type="button" id="upload-main-image-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-r-lg transition-all duration-200 text-sm flex-shrink-0"><i class="fas fa-upload mr-2"></i>Tải ảnh lên</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="new-product-description" class="block text-gray-700 text-lg font-bold mb-2">Mô tả sản phẩm:</label>
+                            <textarea id="new-product-description" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none"></textarea>
+                        </div>
+                        <div>
+                            <label for="new-product-reviews" class="block text-gray-700 text-lg font-bold mb-2">Lượt Đánh Giá (Số lượng):</label>
+                            <input type="number" id="new-product-reviews" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" value="0" min="0">
+                        </div>
+
+                        <div class="border p-4 rounded-lg bg-gray-50">
+                            <h5 class="text-xl font-semibold mb-3 text-gray-700">Tùy Chọn Màu Sắc (kèm Giá tác động)</h5>
+                            <div id="color-options-container" class="space-y-3">
+                            </div>
+                            <button type="button" id="add-color-option-btn" class="mt-4 bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200"><i class="fas fa-plus mr-2"></i>Thêm Màu Sắc</button>
+                        </div>
+
+                        <div class="border p-4 rounded-lg bg-gray-50">
+                            <h5 class="text-xl font-semibold mb-3 text-gray-700">Tùy Chọn Dung Lượng (kèm Giá tác động)</h5>
+                            <div id="storage-options-container" class="space-y-3">
+                            </div>
+                            <button type="button" id="add-storage-option-btn" class="mt-4 bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200"><i class="fas fa-plus mr-2"></i>Thêm Dung Lượng</button>
+                        </div>
+
+                        <div class="border p-4 rounded-lg bg-yellow-50">
+                            <h5 class="text-xl font-semibold mb-3 text-gray-700">Các Biến Thể Sản Phẩm (Màu sắc + Dung lượng, kèm số lượng & Giá tác động riêng)</h5>
+                            <div id="variants-container" class="space-y-3">
+                            </div>
+                            <button type="button" id="add-variant-btn" class="mt-4 bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200"><i class="fas fa-plus mr-2"></i>Thêm Biến Thể</button>
+                            <p class="text-sm text-gray-600 mt-2">Lưu ý: Chỉ thêm biến thể sau khi đã định nghĩa các Tùy chọn Màu sắc và Dung lượng phía trên.</p>
+                        </div>
+
+                        <button type="submit" id="submit-product-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg mt-6"><i class="fas fa-save mr-2"></i>Thêm Sản Phẩm</button>
+                        <button type="button" id="cancel-edit-btn" class="hidden bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg mt-2"><i class="fas fa-times-circle mr-2"></i>Hủy Chỉnh Sửa</button>
+                    </form>
+                </div>
+
+                <div class="mt-8 border-b pb-6 border-gray-200">
+                    <h4 class="text-2xl font-semibold mb-4 text-gray-800">Thêm Mã Voucher Mới</h4>
+                    <form id="add-voucher-form" class="space-y-4">
+                        <div>
+                            <label for="new-voucher-code" class="block text-gray-700 text-lg font-bold mb-2">Mã Voucher:</label>
+                            <input type="text" id="new-voucher-code" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+                        <div>
+                            <label for="new-voucher-value" class="block text-gray-700 text-lg font-bold mb-2">Giá Trị Voucher (ví dụ: 0.10 cho 10%, 50000 cho 50.000 VND):</label>
+                            <input type="number" step="any" id="new-voucher-value" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required min="0">
+                        </div>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-plus-square mr-2"></i>Thêm Voucher</button>
+                    </form>
+
+                    <div class="mt-8">
+                        <h4 class="text-2xl font-semibold mb-4 text-gray-800">Voucher Hiện Có</h4>
+                        <div id="current-vouchers-list" class="space-y-2">
+                            <p class="text-gray-500 italic">Chưa có voucher nào.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <h4 class="text-2xl font-semibold mb-4 text-gray-800">Quản lý Gói Bảo Hành</h4>
+                    <form id="add-edit-warranty-package-form" class="space-y-4">
+                        <input type="hidden" id="edit-warranty-package-id">
+                        <div>
+                            <label for="new-warranty-package-name" class="block text-gray-700 text-lg font-bold mb-2">Tên Gói Bảo Hành:</label>
+                            <input type="text" id="new-warranty-package-name" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+                        <div>
+                            <label for="new-warranty-package-price" class="block text-gray-700 text-lg font-bold mb-2">Giá (VND):</label>
+                            <input type="number" id="new-warranty-package-price" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required min="0">
+                        </div>
+                        <div>
+                            <label for="new-warranty-package-discount" class="block text-gray-700 text-lg font-bold mb-2">Giảm Giá (%):</label>
+                            <input type="number" id="new-warranty-package-discount" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" value="0" min="0" max="100">
+                        </div>
+                        <button type="submit" id="submit-warranty-package-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-plus-square mr-2"></i>Thêm Gói Bảo Hành</button>
+                        <button type="button" id="cancel-edit-warranty-package-btn" class="hidden bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg mt-2"><i class="fas fa-times-circle mr-2"></i>Hủy Chỉnh Sửa</button>
+                    </form>
+
+                    <div class="mt-8">
+                        <h4 class="text-2xl font-semibold mb-4 text-gray-800">Các Gói Bảo Hành Hiện Có</h4>
+                        <div id="current-warranty-packages-list" class="space-y-2">
+                            <p class="text-gray-500 italic">Chưa có gói bảo hành nào.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="shop-settings-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-xl w-full relative modal-content max-h-[85vh] overflow-y-auto">
+            <button id="close-settings-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-3xl font-bold mb-6 text-gray-900 text-center">Cài Đặt Cửa Hàng</h3>
+
+            <div id="settings-content-area" class="relative-container rounded-3xl p-4">
+                <form id="shop-settings-form" class="space-y-4">
+                    <div>
+                        <label for="shop-name-input" class="block text-gray-700 text-lg font-bold mb-2">Tên Cửa Hàng:</label>
+                        <input type="text" id="shop-name-input" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                    </div>
+                    <div>
+                        <label for="shop-address-input" class="block text-gray-700 text-lg font-bold mb-2">Đc:</label>
+                        <input type="text" id="shop-address-input" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập địa chỉ cửa hàng của bạn">
+                    </div>
+                    <div>
+                        <label for="background-image-url" class="block text-gray-700 text-lg font-bold mb-2">URL Hình Nền:</label>
+                        <div class="flex gap-2">
+                            <input type="url" id="background-image-url" class="shadow appearance-none border rounded-l-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://example.com/image.jpg">
+                                <button type="button" id="upload-background-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-r-lg transition-all duration-200 text-sm flex-shrink-0"><i class="fas fa-upload mr-2"></i>Tải ảnh lên</button>
+                            </div>
+                        <small class="text-gray-500">Để trống nếu không muốn dùng hình nền.</small>
+                    </div>
+                    <div>
+                        <label for="advertisement-text-input" class="block text-gray-700 text-lg font-bold mb-2">Nội dung quảng cáo:</label>
+                        <input type="text" id="advertisement-text-input" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ví dụ: Giảm giá 50% tất cả sản phẩm!">
+                        <small class="text-gray-500">Để trống để ẩn banner quảng cáo.</small>
+                    </div>
+                    <div>
+                        <label for="advertisement-animation-select" class="block text-gray-700 text-lg font-bold mb-2">Hiệu ứng quảng cáo:</label>
+                        <select id="advertisement-animation-select" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="none">Không có</option>
+                            <option value="marquee">Chữ chạy</option>
+                            <option value="flicker">Nhấp nháy</option>
+                        </select>
+                    </div>
+
+                    <div class="border p-4 rounded-lg bg-gray-50 space-y-4">
+                        <h4 class="text-xl font-semibold mb-3 text-gray-700">Cài đặt Thanh toán QR Code Ngân hàng</h4>
+                        <div>
+                            <label for="bank-name-input" class="block text-gray-700 text-lg font-bold mb-2">Tên Ngân hàng:</label>
+                            <input type="text" id="bank-name-input" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ví dụ: Vietcombank">
+                        </div>
+                        <div>
+                            <label for="account-number-input" class="block text-gray-700 text-lg font-bold mb-2">Số Tài khoản:</label>
+                            <input type="text" id="account-number-input" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ví dụ: 0123456789">
+                        </div>
+                        <div>
+                            <label for="account-holder-input" class="block text-gray-700 text-lg font-bold mb-2">Tên Chủ tài khoản:</label>
+                            <input type="text" id="account-holder-input" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ví dụ: NGUYEN VAN A">
+                        </div>
+                        <div>
+                            <label for="qr-code-image-url-input" class="block text-gray-700 text-lg font-bold mb-2">URL Ảnh QR Code Ngân hàng:</label>
+                            <div class="flex gap-2">
+                                <input type="url" id="qr-code-image-url-input" class="shadow appearance-none border rounded-l-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://example.com/qr_code.png">
+                                <button type="button" id="upload-qr-code-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-r-lg transition-all duration-200 text-sm flex-shrink-0"><i class="fas fa-upload mr-2"></i>Tải ảnh lên</button>
+                            </div>
+                            <small class="text-gray-500">Đây là ảnh QR Code mà khách hàng sẽ quét để thanh toán.</small>
+                        </div>
+                    </div>
+
+                    <div class="border p-4 rounded-lg bg-gray-50 space-y-4">
+                        <h4 class="text-xl font-semibold mb-3 text-gray-700">Cài đặt Đơn vị Vận chuyển</h4>
+                        <div>
+                            <label for="shipping-unit-name-input" class="block text-gray-700 text-lg font-bold mb-2">Tên Đơn vị Vận chuyển (mặc định GHN Express):</label>
+                            <input type="text" id="shipping-unit-name-input" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ví dụ: GHN Express, GHTK" value="GHN Express">
+                        </div>
+                        <div>
+                            <label for="shipping-unit-image-url-input" class="block text-gray-700 text-lg font-bold mb-2">URL Ảnh Đơn vị Vận chuyển:</label>
+                            <div class="flex gap-2">
+                                <input type="url" id="shipping-unit-image-url-input" class="shadow appearance-none border rounded-l-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://example.com/shipping_logo.png">
+                                <button type="button" id="upload-shipping-unit-image-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-r-lg transition-all duration-200 text-sm flex-shrink-0"><i class="fas fa-upload mr-2"></i>Tải ảnh lên</button>
+                            </div>
+                            <small class="text-gray-500">Ảnh logo của đơn vị vận chuyển.</small>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-save mr-2"></i>Lưu Cài Đặt</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="shop-analytics-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-3xl w-full relative modal-content max-h-[85vh] overflow-y-auto">
+            <button id="close-analytics-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-3xl font-bold mb-6 text-gray-900 text-center">Thống Kê Cửa Hàng</h3>
+
+            <div id="analytics-content-area" class="relative-container rounded-3xl p-4">
+                <div class="mb-6 flex flex-col md:flex-row items-center gap-4">
+                    <div class="flex-1 w-full">
+                        <label for="report-start-date" class="block text-gray-700 text-sm font-bold mb-2">Từ ngày:</label>
+                        <input type="date" id="report-start-date" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex-1 w-full">
+                        <label for="report-end-date" class="block text-gray-700 text-sm font-bold mb-2">Đến ngày:</label>
+                        <input type="date" id="report-end-date" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <button id="generate-report-btn" class="mt-6 md:mt-0 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 flex-shrink-0"><i class="fas fa-chart-bar mr-2"></i>Tạo Báo Cáo</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h4 class="text-xl font-semibold text-gray-800 mb-4">Tổng Doanh Thu</h4>
+                        <p id="total-revenue-display" class="text-3xl font-bold text-green-600">0 VND</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h4 class="text-xl font-semibold text-gray-800 mb-4">Số Lượng Đơn Hàng</h4>
+                        <p id="total-orders-display" class="text-3xl font-bold text-purple-600">0</p>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-md col-span-1 md:col-span-2">
+                        <h4 class="text-xl font-semibold text-gray-800 mb-4">Sản Phẩm Bán Chạy Nhất</h4>
+                        <ul id="top-selling-products-list" class="list-disc pl-5 text-gray-700">
+                            <li class="italic text-gray-500">Chưa có dữ liệu.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="payment-vat-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-lg w-full relative modal-content max-h-[85vh] overflow-y-auto">
+            <button id="close-payment-vat-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-2xl font-bold mb-6 text-gray-900 text-center">Thuế Giá Trị Gia Tăng (VAT)</h3>
+
+            <div id="qr-payment-details" class="flex flex-col items-center mb-6">
+                <img id="qr-code-display" src="" onerror="this.onerror=null;this.src='https://placehold.co/200x200/cccccc/333333?text=QR+Code';" alt="Mã QR Ngân hàng" class="w-48 h-48 object-contain rounded-lg mb-4 shadow-md">
+                <p class="text-gray-700 text-lg font-semibold"><i class="fas fa-university mr-2 text-blue-600"></i>Ngân hàng: <span id="bank-name-display" class="font-bold"></span></p>
+                <p class="text-gray-700 text-lg font-semibold"><i class="fas fa-credit-card mr-2 text-green-600"></i>Số tài khoản: <span id="account-number-display" class="font-bold"></span></p>
+                <p class="text-gray-700 text-lg font-semibold mb-4"><i class="fas fa-user-circle mr-2 text-purple-600"></i>Chủ tài khoản: <span id="account-holder-display" class="font-bold"></span></p>
+                <p class="text-gray-700 text-xl font-bold">Giá đơn hàng (chưa VAT): <span id="vat-base-amount" class="text-blue-700">0 VND</span></p>
+                <p class="text-gray-700 text-xl font-bold">Tổng tiền VAT (10%): <span id="total-vat-original-display" class="text-blue-700">0 VND</span></p>
+                <p class="text-gray-700 text-xl font-bold">Shop hỗ trợ (8%): <span id="shop-support-vat-display" class="text-blue-700">0 VND</span></p>
+                <p class="text-gray-700 text-xl font-bold">Khách hàng thanh toán (2%): <span id="payment-modal-vat-total" class="text-blue-700">0 VND</span></p>
+            </div>
+
+            <div class="mb-4">
+                <label for="payment-amount-input" class="block text-gray-700 text-lg font-bold mb-2">Phí VAT khách hàng cần thanh cho đơn hàng:</label>
+                <input type="text" id="payment-amount-input" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Phí VAT">
+            </div>
+
+            <div class="mb-6 bg-gray-100 p-4 rounded-lg">
+                <p class="text-gray-700 text-lg font-semibold">Thanh toán khi nhận hàng: <span id="amount-paid-display" class="font-bold text-green-600">0 VND</span></p>
+                <p class="text-gray-700 text-lg font-semibold">Khách hàng thanh toán (2%): <span id="remaining-payment-display" class="font-bold text-red-600">0 VND</span></p>
+            </div>
+
+            <button id="confirm-payment-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-check-circle mr-2"></i>Thanh Toán</button>
+            <button id="admin-confirm-vat-payment-btn" class="hidden mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-check-circle mr-2"></i>Admin Xác Nhận</button>
+        </div>
+    </div>
+
+    <div id="order-tracking-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-xl w-full relative modal-content max-h-[85vh] overflow-y-auto">
+            <button id="close-order-tracking-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-3xl font-bold mb-6 text-gray-900 text-center">Theo Dõi Đơn Hàng</h3>
+
+            <div class="flex flex-col items-center mb-6">
+                <img id="tracking-shipping-unit-image" src="" onerror="this.onerror=null;this.src='https://placehold.co/200x100/cccccc/333333?text=Shipping+Unit';" alt="Đơn vị vận chuyển" class="w-48 h-24 object-contain mb-4 rounded-lg shadow-sm">
+                <p class="text-gray-700 text-lg font-semibold"><i class="fas fa-truck mr-2 text-blue-600"></i>Đơn vị vận chuyển: <span id="tracking-shipping-unit-name" class="font-bold">GHN Express</span></p>
+            </div>
+
+            <p class="text-gray-700 text-lg mb-4">Mã đơn hàng: <span id="tracking-order-id" class="font-semibold text-blue-700"></span></p>
+
+            <div class="mb-4">
+                <p class="text-gray-700 text-lg font-semibold">Sản phẩm:</p>
+                <div id="tracking-product-details" class="border p-3 rounded-lg bg-gray-100">
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <p class="text-gray-700 text-lg font-semibold">Địa chỉ hiện tại:</p>
+                <p id="tracking-current-location" class="text-gray-800 ml-4"></p>
+            </div>
+
+            <div class="mb-6">
+                <p class="text-gray-700 text-lg font-semibold">Điểm đến:</p>
+                <p id="tracking-destination" class="text-gray-800 ml-4"></p>
+            </div>
+
+            <button id="check-route-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg">
+                <i class="fas fa-route mr-2"></i>Theo dõi trực tuyến
+            </button>
+        </div>
+    </div>
+
+    <div id="payment-warranty-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-blue-50 rounded-3xl shadow-2xl p-8 max-w-lg w-full relative modal-content max-h-[85vh] overflow-y-auto">
+            <button id="close-payment-warranty-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-2xl font-bold mb-6 text-gray-900 text-center">Chọn Gói Bảo Hành</h3>
+
+            <div id="warranty-packages-selection" class="space-y-3 mb-6">
+            </div>
+
+            <div id="qr-payment-details-warranty" class="flex flex-col items-center mb-6 border-t pt-6 border-gray-200">
+                <img id="qr-code-display-warranty" src="" onerror="this.onerror=null;this.src='https://placehold.co/200x200/cccccc/333333?text=QR+Code';" alt="Mã QR Ngân hàng" class="w-48 h-48 object-contain rounded-lg mb-4 shadow-md">
+                <p class="text-gray-700 text-lg font-semibold"><i class="fas fa-university mr-2 text-blue-600"></i>Ngân hàng: <span id="bank-name-display-warranty" class="font-bold"></span></p>
+                <p class="text-gray-700 text-lg font-semibold"><i class="fas fa-credit-card mr-2 text-green-600"></i>Số tài khoản: <span id="account-number-display-warranty" class="font-bold"></span></p>
+                <p class="text-gray-700 text-lg font-semibold mb-4"><i class="fas fa-user-circle mr-2 text-purple-600"></i>Chủ tài khoản: <span id="account-holder-display-warranty" class="font-bold"></span></p>
+                <p class="text-gray-700 text-xl font-bold">Tổng tiền cần thanh toán: <span id="warranty-payment-total" class="text-blue-700">0 VND</span></p>
+            </div>
+
+            <button id="confirm-warranty-payment-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-check-circle mr-2"></i>Xác Nhận Thanh Toán</button>
+            <button id="admin-confirm-warranty-btn" class="hidden mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-check-circle mr-2"></i>Admin Xác Nhận</button>
+        </div>
+    </div>
+
+    <div id="login-register-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full text-center relative modal-content">
+            <button id="close-login-register-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 id="auth-modal-title" class="text-2xl font-bold text-gray-800 mb-6">Đăng nhập</h3>
+
+            <div id="login-form">
+                <div class="mb-4 text-left">
+                    <label for="login-username" class="block text-gray-700 text-sm font-semibold mb-2">Tên đăng nhập (Email)</label>
+                    <input type="email" id="login-username" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+                </div>
+                <div class="mb-6 text-left">
+                    <label for="login-password" class="block text-gray-700 text-sm font-semibold mb-2">Mật khẩu</label>
+                    <input type="password" id="login-password" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+                </div>
+                <p id="login-error-message" class="text-red-500 text-sm mb-4 hidden"></p>
+                <button id="login-submit-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:scale-105 active:scale-95">
+                    Đăng nhập
+                </button>
+                <p class="mt-4 text-gray-600">Chưa có tài khoản? <a href="#" id="show-register-form-link" class="text-blue-600 hover:underline">Đăng ký ngay</a></p>
+            </div>
+
+            <div id="register-form" class="hidden max-h-[70vh] overflow-y-auto">
+                <div class="mb-4 text-left">
+                    <label for="register-username" class="block text-gray-700 text-sm font-semibold mb-2">Tên đăng nhập (Email)</label>
+                    <input type="email" id="register-username" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+                </div>
+                <div class="mb-4 text-left">
+                    <label for="register-password" class="block text-gray-700 text-sm font-semibold mb-2">Mật khẩu</label>
+                    <input type="password" id="register-password" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+                </div>
+                <div class="mb-4 text-left">
+                    <label for="register-confirm-password" class="block text-gray-700 text-sm font-semibold mb-2">Xác nhận lại mật khẩu</label>
+                    <input type="password" id="register-confirm-password" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+                </div>
+                <div class="mb-4 text-left">
+                    <label for="register-fullname" class="block text-gray-700 text-sm font-semibold mb-2">Họ và tên</label>
+                    <input type="text" id="register-fullname" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+                </div>
+                <div class="mb-4 text-left">
+                    <label for="register-phone" class="block text-gray-700 text-sm font-semibold mb-2">Số điện thoại</label>
+                    <input type="tel" id="register-phone" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+                </div>
+                <div class="mb-6 text-left">
+                    <label for="register-province" class="block text-gray-700 text-sm font-semibold mb-2">Địa chỉ</label>
+                    <input type="text" id="register-province" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+                </div>
+                <p id="register-error-message" class="text-red-500 text-sm mb-4 hidden"></p>
+                <button id="register-submit-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:scale-105 active:scale-95">
+                    Đăng ký
+                </button>
+                <p class="mt-4 text-gray-600">Đã có tài khoản? <a href="#" id="show-login-form-link" class="text-blue-600 hover:underline">Đăng nhập</a></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="profile-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full text-center relative modal-content max-h-[80vh] overflow-y-auto">
+            <button id="close-profile-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-2xl font-bold text-gray-800 mb-6">Hồ sơ của bạn</h3>
+            <div class="mb-4 text-left">
+                <label for="profile-username" class="block text-gray-700 text-sm font-semibold mb-2">Tên đăng nhập (Email)</label>
+                <input type="text" id="profile-username" class="w-full p-3 border border-gray-300 rounded-lg bg-gray-100 cursor-not-allowed text-gray-900" readonly>
+            </div>
+            <div class="mb-4 text-left">
+                <label for="profile-fullname" class="block text-gray-700 text-sm font-semibold mb-2">Họ và tên</label>
+                <input type="text" id="profile-fullname" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+            </div>
+            <div class="mb-4 text-left">
+                <label for="profile-phone" class="block text-gray-700 text-sm font-semibold mb-2">Số điện thoại</label>
+                <input type="tel" id="profile-phone" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+            </div>
+            <div class="mb-6 text-left">
+                <label for="profile-province" class="block text-gray-700 text-sm font-semibold mb-2">Địa chỉ</label>
+                <input type="text" id="profile-province" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
+            </div>
+            <p id="profile-error-message" class="text-red-500 text-sm mb-4 hidden"></p>
+            <button id="save-profile-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:scale-105 active:scale-95">
+                Lưu thay đổi
+            </button>
+            <button id="close-profile-modal-btn" class="mt-4 w-full bg-gray-400 hover:bg-gray-500 text-white font-semibold py-3 px-6 rounded-lg transition duration-300 transform hover:scale-105 active:scale-95">
+                Đóng
+            </button>
+        </div>
+    </div>
+
+    <!-- Link to external JavaScript file -->
+    <script type="module" src="./script.js"></script>
+</body>
+</html>
