@@ -7,7 +7,7 @@ import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnap
 // __firebase_config: Firebase configuration object (JSON string) for initializing the app.
 // __initial_auth_token: Custom Firebase authentication token for initial sign-in.
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = {
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
     // User's provided Firebase configuration for local testing
     apiKey: "AIzaSyAJmYFnLAhskjszeK5DZve4z0wRXrXl7Sc",
     authDomain: "iphonechinhhang-47bdd.firebaseapp.com",
@@ -25,7 +25,7 @@ const auth = getAuth(app);
 
 let loggedInUser = null;
 let currentUserId = null;
-const ADMIN_EMAIL = 'mobilechinhhang.admin@gmail.com'; // Ensure this matches your admin email
+// ADMIN_EMAIL will now be fetched from Firestore
 const DEFAULT_WAREHOUSE_ADDRESS = "194 Đ. Lê Duẩn, Khâm Thiên, Đống Đa, Hà Nội";
 
 let shopDataCache = {
@@ -37,7 +37,8 @@ let shopDataCache = {
     shippingUnit: {},
     name: 'Thegioididong.com',
     address: 'Chưa cập nhật',
-    backgroundImg: ''
+    backgroundImg: '',
+    adminEmail: 'dimensiongsv@gmail.com' // Default admin email
 };
 let userOrdersCache = [];
 let userCartCache = [];
@@ -202,6 +203,8 @@ const uploadQrCodeBtn = document.getElementById('upload-qr-code-btn');
 const shippingUnitNameInput = document.getElementById('shipping-unit-name-input');
 const shippingUnitImageURLInput = document.getElementById('shipping-unit-image-url-input');
 const uploadShippingUnitImageBtn = document.getElementById('upload-shipping-unit-image-btn');
+// New element for admin email input
+const adminEmailInput = document.getElementById('admin-email-input');
 
 const reportStartDateInput = document.getElementById('report-start-date');
 const reportEndDateInput = document.getElementById('report-end-date');
@@ -463,6 +466,7 @@ async function loadShopSettingsToUI() {
     qrCodeImageURLInput.value = shopDataCache.bankDetails.qrCodeImage || '';
     shippingUnitNameInput.value = shopDataCache.shippingUnit.name || 'GHN Express';
     shippingUnitImageURLInput.value = shopDataCache.shippingUnit.image || '';
+    adminEmailInput.value = shopDataCache.adminEmail || ''; // Load admin email
 
     updateAdvertisementBanner();
 }
@@ -503,6 +507,7 @@ shopSettingsForm.addEventListener('submit', async (e) => {
     shopDataCache.bankDetails.qrCodeImage = qrCodeImageURLInput.value.trim();
     shopDataCache.shippingUnit.name = shippingUnitNameInput.value.trim();
     shopDataCache.shippingUnit.image = shippingUnitImageURLInput.value.trim();
+    shopDataCache.adminEmail = adminEmailInput.value.trim(); // Save admin email
     await saveShopData();
     loadShopSettingsToUI();
     hideLoading();
@@ -2524,11 +2529,11 @@ onAuthStateChanged(auth, async (user) => {
             if (userDocSnap.exists()) {
                 loggedInUser = { id: currentUserId, ...userDocSnap.data() };
                 // Ensure isAdmin is explicitly set based on email, even if not in Firestore doc
-                loggedInUser.isAdmin = (loggedInUser.email === ADMIN_EMAIL);
+                loggedInUser.isAdmin = (loggedInUser.email === shopDataCache.adminEmail);
                 console.log("Logged in user data:", loggedInUser);
             } else {
                 // If user profile doesn't exist, create a basic one
-                const isUserAdmin = (user.email === ADMIN_EMAIL);
+                const isUserAdmin = (user.email === shopDataCache.adminEmail);
                 loggedInUser = {
                     id: currentUserId,
                     username: user.email || `guest_${currentUserId.substring(0, 8)}`,
@@ -2659,7 +2664,7 @@ registerSubmitBtn.addEventListener('click', async () => {
     try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
-        const isUserAdmin = (email === ADMIN_EMAIL);
+        const isUserAdmin = (email === shopDataCache.adminEmail); // Use fetched admin email
 
         await setDoc(doc(db, `artifacts/${appId}/users/${user.uid}`), {
             username: email,
