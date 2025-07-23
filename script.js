@@ -466,7 +466,10 @@ async function loadShopSettingsToUI() {
     qrCodeImageURLInput.value = shopDataCache.bankDetails.qrCodeImage || '';
     shippingUnitNameInput.value = shopDataCache.shippingUnit.name || 'GHN Express';
     shippingUnitImageURLInput.value = shopDataCache.shippingUnit.image || '';
-    adminEmailInput.value = shopDataCache.adminEmail || ''; // Load admin email
+    // Đảm bảo rằng adminEmailInput tồn tại trước khi truy cập .value
+    if (adminEmailInput) {
+        adminEmailInput.value = shopDataCache.adminEmail || ''; // Load admin email
+    }
 
     updateAdvertisementBanner();
 }
@@ -504,10 +507,11 @@ shopSettingsForm.addEventListener('submit', async (e) => {
     shopDataCache.bankDetails.bankName = bankNameInput.value.trim();
     shopDataCache.bankDetails.accountNumber = accountNumberInput.value.trim();
     shopDataCache.bankDetails.accountHolder = accountHolderInput.value.trim();
-    shopDataCache.bankDetails.qrCodeImage = qrCodeImageURLInput.value.trim();
-    shopDataCache.shippingUnit.name = shippingUnitNameInput.value.trim();
-    shopDataCache.shippingUnit.image = shippingUnitImageURLInput.value.trim();
-    shopDataCache.adminEmail = adminEmailInput.value.trim(); // Save admin email
+    shopDataCache.bankDetails.qrCodeImage = qrCodeImageURLInput ? qrCodeImageURLInput.value.trim() : '';
+    shopDataCache.shippingUnit.name = shippingUnitNameInput ? shippingUnitNameInput.value.trim() : '';
+    shopDataCache.shippingUnit.image = shippingUnitImageURLInput ? shippingUnitImageURLInput.value.trim() : '';
+    // Đảm bảo rằng adminEmailInput tồn tại trước khi truy cập .value
+    shopDataCache.adminEmail = adminEmailInput ? adminEmailInput.value.trim() : ''; // Save admin email
     await saveShopData();
     loadShopSettingsToUI();
     hideLoading();
@@ -1345,7 +1349,7 @@ async function renderOrders(status) {
                     <p class="text-gray-700 mb-2"><strong>Khách hàng:</strong> ${order.customerName} (ID: ${order.userId})</p>
                     <p class="text-gray-700 mb-2"><strong>SĐT:</strong> <span class="blurred-content" id="order-phone-${order.id}">${order.customerPhone}</span> <button type="button" class="toggle-visibility-btn text-blue-500 hover:underline" data-target-id="order-phone-${order.id}"><i class="fas fa-eye"></i></button></p>
                     <p class="text-gray-700 mb-2"><strong>Địa chỉ:</strong> <span class="blurred-content" id="order-address-${order.id}">${order.customerAddress}</span> <button type="button" class="toggle-visibility-btn text-blue-500 hover:underline" data-target-id="order-address-${order.id}"><i class="fas fa-eye"></i></button></p>
-                    <p class="text-gray-700 mb-2"><strong>Vị trí kho:</strong> ${order.orderLocation || 'N/A'}</p>
+                    <p class="text-gray-700 mb-2"><strong>Vị trí hiện tại:</strong> ${order.orderLocation || 'N/A'}</p>
                     <p class="text-gray-700 mb-2"><strong>Ngày dự kiến giao:</strong> ${order.estimatedDeliveryDate || 'N/A'}</p>
                     <p class="text-gray-700 mb-2"><strong>Tổng tiền:</strong> ${formatCurrency(order.totalAmount)}</p>
                     <p class="text-gray-700 mb-2"><strong>VAT (Khách trả):</strong> ${formatCurrency(order.totalVATCustomerPays)} (${order.vatPaymentStatus === 'paid' ? 'Đã thanh toán' : (order.vatPaymentStatus === 'pending_admin' ? 'Đang xác nhận thanh toán' : 'Chưa thanh toán')})</p>
