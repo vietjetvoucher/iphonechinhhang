@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=0.5, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes">
-    <title id="page-title">Iphonechinhhang.com</title>
+    <title id="page-title">HHmobile.com</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -380,7 +380,7 @@
                 <h3 id="modal-product-name" class="text-3xl font-bold mb-4 text-gray-900"></h3>
                 <p class="text-xl font-semibold mb-2 text-gray-700">Giá gốc: <span id="modal-product-base-price" class="font-bold"></span></p>
                 <p class="text-xl font-semibold mb-2 text-gray-700">Tổng giá (chưa VAT): <span id="modal-product-price-display" class="price-original"></span></p>
-                <p class="text-xs font-semibold mb-2 text-gray-700">VAT (10% theo quy định nhà nước): <span id="modal-product-vat-display" class="font-bold text-red-600"></span></p>
+                <p class="text-xs font-semibold mb-2 text-gray-700">VAT: <span id="modal-product-vat-display" class="font-bold text-black-600"></span></p>
                 <p id="modal-product-discount-display" class="text-xl font-semibold mb-4 price-discounted hidden"></p>
 
                 <div id="product-options" class="mb-6 space-y-4">
@@ -428,7 +428,7 @@
                     <input type="text" id="customer-name" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                 </div>
                 <div>
-                    <label for="customer-phone" class="block text-gray-700 text-lg font-bold mb-2">Số điện thoại:</label>
+                    <label for="customer-phone" class="block text-gray-700 text-lg font-bold mb-2">Số điện thoại liên hệ:</label>
                     <div class="masked-input-wrapper">
                         <input type="tel" id="customer-phone" class="shadow appearance-none border rounded-lg w-full py-3 px-4 pr-12 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                         <button type="button" class="toggle-visibility-btn" data-target-id="customer-phone">
@@ -437,7 +437,7 @@
                     </div>
                 </div>
                 <div>
-                    <label for="customer-address" class="block text-gray-700 text-lg font-bold mb-2">Địa chỉ:</label>
+                    <label for="customer-address" class="block text-gray-700 text-lg font-bold mb-2">Địa chỉ nhận hàng:</label>
                     <div class="masked-input-wrapper">
                         <textarea id="customer-address" class="shadow appearance-none border rounded-lg w-full py-3 px-4 pr-12 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none" required></textarea>
                         <button type="button" class="toggle-visibility-btn" data-target-id="customer-address">
@@ -447,7 +447,7 @@
                 </div>
 
                 <div>
-                    <label for="order-location" class="block text-gray-700 text-lg font-bold mb-2">Vị trí kho hàng:</label>
+                    <label for="order-location" class="block text-gray-700 text-lg font-bold mb-2">Vị trí kho:</label>
                     <input type="text" id="order-location" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Chi nhánh kho">
                 </div>
                 <div>
@@ -713,6 +713,15 @@
                         </div>
                     </div>
 
+                    <div class="border p-4 rounded-lg bg-gray-50 space-y-4">
+                        <h4 class="text-xl font-semibold mb-3 text-gray-700">Cài đặt Admin</h4>
+                        <div>
+                            <label for="admin-email-input" class="block text-gray-700 text-lg font-bold mb-2">Email Admin:</label>
+                            <input type="email" id="admin-email-input" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="admin@example.com">
+                            <small class="text-gray-500">Địa chỉ email của tài khoản quản trị viên.</small>
+                        </div>
+                    </div>
+
                     <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-save mr-2"></i>Lưu Cài Đặt</button>
                 </form>
             </div>
@@ -882,11 +891,11 @@
                     <input type="text" id="register-fullname" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
                 </div>
                 <div class="mb-4 text-left">
-                    <label for="register-phone" class="block text-gray-700 text-sm font-semibold mb-2">Số điện thoại</label>
+                    <label for="register-phone" class="block text-gray-700 text-sm font-semibold mb-2">Số điện thoại liên hệ</label>
                     <input type="tel" id="register-phone" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
                 </div>
                 <div class="mb-6 text-left">
-                    <label for="register-province" class="block text-gray-700 text-sm font-semibold mb-2">Địa chỉ</label>
+                    <label for="register-province" class="block text-gray-700 text-sm font-semibold mb-2">Địa chỉ nhận hàng</label>
                     <input type="text" id="register-province" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
                 </div>
                 <p id="register-error-message" class="text-red-500 text-sm mb-4 hidden"></p>
@@ -911,11 +920,11 @@
                 <input type="text" id="profile-fullname" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
             </div>
             <div class="mb-4 text-left">
-                <label for="profile-phone" class="block text-gray-700 text-sm font-semibold mb-2">Số điện thoại</label>
+                <label for="profile-phone" class="block text-gray-700 text-sm font-semibold mb-2">Số điện thoại liên hệ</label>
                 <input type="tel" id="profile-phone" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
             </div>
             <div class="mb-6 text-left">
-                <label for="profile-province" class="block text-gray-700 text-sm font-semibold mb-2">Địa chỉ</label>
+                <label for="profile-province" class="block text-gray-700 text-sm font-semibold mb-2">Địa chỉ nhận hàng</label>
                 <input type="text" id="profile-province" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900">
             </div>
             <p id="profile-error-message" class="text-red-500 text-sm mb-4 hidden"></p>
