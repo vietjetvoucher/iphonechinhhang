@@ -9,13 +9,13 @@ import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, q
 // Global variables provided by the Canvas environment (assuming they are set up similarly to script.js)
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-    apiKey: "AIzaSyBPjpG1V3HpR4wCFEXth1byWN0q9-9jWiM",
-    authDomain: "hhmobile-df259.firebaseapp.com",
-    projectId: "hhmobile-df259",
-    storageBucket: "hhmobile-df259.firebaseapp.com",
-    messagingSenderId: "273294651647",
-    appId: "1:273294651647:web:02bcd7be6f760cd6849cca",
-    measurementId: "G-YSJ062B717"
+    apiKey: "AIzaSyAJmYFnLAhskjszeK5DZve4z0wRXrXl7Sc",
+    authDomain: "iphonechinhhang-47bdd.firebaseapp.com",
+    projectId: "iphonechinhhang-47bdd",
+    storageBucket: "iphonechinhhang-47bdd.firebasestorage.app",
+    messagingSenderId: "308005027963",
+    appId: "1:308005027963:web:35afe47c3ace690e38e2de",
+    measurementId: "G-PQ7450T99T"
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
