@@ -269,184 +269,6 @@
             background-color: #eff6ff;
             box-shadow: 0 0 0 2px #bfdbfe;
         }
-
-        /* Styles for gift button and lucky wheel */
-        #gift-button {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background-color: #FFD100;
-            color: #333;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2rem;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-            cursor: pointer;
-            z-index: 50;
-            transition: transform 0.2s ease-in-out;
-        }
-        #gift-button:hover {
-            transform: scale(1.1);
-        }
-        #gift-button.disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-
-        #lucky-wheel-modal .modal-content {
-            background-color: #fff;
-            padding: 2rem;
-            text-align: center;
-        }
-        #lucky-wheel-container {
-            position: relative;
-            width: 300px;
-            height: 300px;
-            margin: 0 auto 20px;
-            border-radius: 50%;
-            overflow: hidden; /* Ensure wheel stays within bounds */
-        }
-        #lucky-wheel-canvas {
-            border-radius: 50%;
-            background-color: #f0f0f0;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-            transform: rotate(0deg); /* Initial state */
-            transform-origin: center center;
-        }
-        #spin-button {
-            margin-top: 20px;
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-size: 1.2rem;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        #spin-button:hover:not(:disabled) {
-            background-color: #45a049;
-        }
-        #spin-button:disabled {
-            background-color: #ccc;
-            cursor: not-allowed;
-        }
-        #prize-result {
-            margin-top: 20px;
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #333;
-        }
-
-        /* Confetti effect */
-        .confetti-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            overflow: hidden;
-            z-index: 10000;
-        }
-        .confetti {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background-color: #f00; /* Default color */
-            animation: fall 3s forwards;
-            opacity: 0;
-        }
-
-        @keyframes fall {
-            0% {
-                transform: translateY(-100px) rotateZ(0deg);
-                opacity: 0;
-            }
-            10% {
-                opacity: 1;
-            }
-            100% {
-                transform: translateY(100vh) rotateZ(720deg);
-                opacity: 0;
-            }
-        }
-        .admin-rewards-list {
-            margin-top: 20px;
-            border-top: 1px solid #eee;
-            padding-top: 20px;
-        }
-        .admin-reward-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background-color: #f9f9f9;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .admin-reward-item img {
-            width: 40px;
-            height: 40px;
-            object-fit: contain;
-            border-radius: 4px;
-            margin-right: 10px;
-        }
-        .admin-reward-item .info {
-            flex-grow: 1;
-        }
-        .admin-reward-item .info p {
-            margin: 0;
-            font-size: 0.9em;
-            color: #555;
-        }
-        .admin-reward-item .actions button {
-            margin-left: 8px;
-            padding: 6px 10px;
-            border-radius: 5px;
-            font-size: 0.8em;
-            cursor: pointer;
-        }
-        .admin-reward-item .actions .edit-btn {
-            background-color: #ffc107;
-            color: #333;
-        }
-        .admin-reward-item .actions .delete-btn {
-            background-color: #dc3545;
-            color: white;
-        }
-        #add-reward-form {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-        }
-        #add-reward-form div {
-            margin-bottom: 15px;
-        }
-        #add-reward-form label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-        #add-reward-form input,
-        #add-reward-form select {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        #add-reward-form button {
-            background-color: #007bff;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
     </style>
 </head>
 <body class="bg-fdf8f4 text-333">
@@ -454,7 +276,7 @@
     <header class="fixed top-0 left-0 right-0 z-40 bg-yellow-400 text-gray-800 shadow-lg py-6 px-6 md:px-6 lg:px-16 w-full flex items-center justify-between h-[75px]">
         <div class="flex items-center">
             <h1 id="shop-name-display" class="text-2xl lg:text-3xl font-bold rounded-full py-1 px-4 transition-all duration-300 ease-in-out hover:scale-105 cursor-pointer mr-4 lg:mr-6">
-                <i class="fas fa-mobile-alt mr-2 text-gray-700"></i><span class="text-gray-900">HHmobile</span><span class="text-red-600">.app</span>
+                <i class="fas fa-mobile-alt mr-2 text-gray-700"></i><span class="text-gray-900">Thegioididong</span><span class="text-red-600">.com</span>
             </h1>
             <div class="relative flex items-center w-48 md:w-64 lg:w-80">
                 <input type="text" id="header-product-search-input" placeholder="Bạn tìm gì..." class="header-search-input focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
@@ -557,8 +379,8 @@
             <div class="md:w-1/2">
                 <h3 id="modal-product-name" class="text-3xl font-bold mb-4 text-gray-900"></h3>
                 <p class="text-xl font-semibold mb-2 text-gray-700">Giá sản phẩm: <span id="modal-product-base-price" class="font-bold"></span></p>
-                <p class="text-xl font-semibold mb-2 text-gray-700">Giá theo màu sắc và dung lượng: <span id="modal-product-price-display" class="price-original"></span></p>
-                <p class="text-xs font-semibold mb-2 text-gray-700">GTTT: <span id="modal-product-vat-display" class="font-bold text-black-600"></span></p>
+                <p class="text-xl font-semibold mb-2 text-gray-700">Tổng giá (chưa VAT): <span id="modal-product-price-display" class="price-original"></span></p>
+                <p class="text-xs font-semibold mb-2 text-gray-700">VAT: <span id="modal-product-vat-display" class="font-bold text-black-600"></span></p>
                 <p id="modal-product-discount-display" class="text-xl font-semibold mb-4 price-discounted hidden"></p>
                 <div id="voucher-expiry-message" class="text-red-500 font-bold text-sm mb-4 hidden"></div>
 
@@ -570,7 +392,7 @@
                 <p id="modal-product-description" class="text-gray-700 mb-4 text-sm"></p>
 
                 <div class="mb-4 text-gray-700 text-sm">
-                    <p class="mb-1"><i class="fas fa-undo-alt mr-2 text-blue-500"></i> Chính sách đổi trả: <span class="font-semibold">30 Ngày</span></p>
+                    <p class="mb-1"><i class="fas fa-undo-alt mr-2 text-blue-500"></i> Chính sách đổi trả: <span class="font-semibold">15 Ngày</span></p>
                     <p id="modal-shipping-cost-display"><i class="fas fa-shipping-fast mr-2 text-green-500"></i> Phí vận chuyển: <span class="font-semibold">Thanh toán khi nhận hàng (Miễn phi khi add voucher)</span></p>
                 </div>
 
@@ -762,7 +584,7 @@
                     </form>
                 </div>
 
-                <div class="mb-8 border-b pb-6 border-gray-200">
+                <div class="mt-8 border-b pb-6 border-gray-200">
                     <h4 class="text-2xl font-semibold mb-4 text-gray-800">Thêm Mã Voucher Mới</h4>
                     <form id="add-voucher-form" class="space-y-4">
                         <div>
@@ -798,16 +620,7 @@
                             <input type="text" id="new-admin-voucher-code" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                         </div>
                         <div>
-                            <label for="new-admin-voucher-type" class="block text-gray-700 text-lg font-bold mb-2">Loại Voucher:</label>
-                            <select id="new-admin-voucher-type" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                                <option value="percentage">Phần trăm (%)</option>
-                                <option value="fixed">Giá trị cố định (VND)</option>
-                                <option value="freeship">Miễn phí vận chuyển</option>
-                                <option value="spin">Lượt quay may mắn</option>
-                            </select>
-                        </div>
-                        <div id="admin-voucher-value-container">
-                            <label for="new-admin-voucher-value" class="block text-gray-700 text-lg font-bold mb-2">Giá Trị Voucher (ví dụ: 0.10 cho 10%, 50000 cho 50.000 VND, 5 cho 5 lượt quay):</label>
+                            <label for="new-admin-voucher-value" class="block text-gray-700 text-lg font-bold mb-2">Giá Trị Voucher (ví dụ: 0.10 cho 10%, 50000 cho 50.000 VND, freeship):</label>
                             <input type="text" id="new-admin-voucher-value" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                         </div>
                         <div>
@@ -819,7 +632,7 @@
                 </div>
                 <!-- END NEW ADMIN VOUCHER SECTION -->
 
-                <div class="mt-8 border-b pb-6 border-gray-200">
+                <div class="mt-8">
                     <h4 class="text-2xl font-semibold mb-4 text-gray-800">Quản lý Gói Bảo Hành</h4>
                     <form id="add-edit-warranty-package-form" class="space-y-4">
                         <input type="hidden" id="edit-warranty-package-id">
@@ -846,45 +659,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- NEW REWARDS MANAGEMENT SECTION -->
-                <div class="mt-8 border-b pb-6 border-gray-200">
-                    <h4 class="text-2xl font-semibold mb-4 text-gray-800">Quản lý Phần Thưởng Vòng Quay May Mắn</h4>
-                    <form id="add-edit-reward-form" class="space-y-4">
-                        <input type="hidden" id="edit-reward-id">
-                        <div>
-                            <label for="new-reward-name" class="block text-gray-700 text-lg font-bold mb-2">Tên Phần Thưởng:</label>
-                            <input type="text" id="new-reward-name" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                        </div>
-                        <div>
-                            <label for="new-reward-type" class="block text-gray-700 text-lg font-bold mb-2">Loại Phần Thưởng:</label>
-                            <select id="new-reward-type" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                                <option value="voucher">Voucher</option>
-                                <option value="item">Sản phẩm</option>
-                                <option value="freespin">Lượt quay miễn phí</option>
-                                <option value="thankyou">Chúc bạn may mắn lần sau</option>
-                            </select>
-                        </div>
-                        <div id="reward-value-container">
-                            <label for="new-reward-value" class="block text-gray-700 text-lg font-bold mb-2">Giá Trị Phần Thưởng (Mã Voucher/ID Sản phẩm/Số lượt quay):</label>
-                            <input type="text" id="new-reward-value" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Voucher: SALE10, Sản phẩm: product-id-123, Lượt quay: 5">
-                        </div>
-                        <div id="reward-image-container">
-                            <label for="new-reward-image" class="block text-gray-700 text-lg font-bold mb-2">URL Hình ảnh Phần Thưởng:</label>
-                            <input type="url" id="new-reward-image" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://example.com/reward.png">
-                        </div>
-                        <div>
-                            <label for="new-reward-chance" class="block text-gray-700 text-lg font-bold mb-2">Tỷ lệ trúng (%):</label>
-                            <input type="number" id="new-reward-chance" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" min="0" max="100" step="0.1" value="0" required>
-                        </div>
-                        <button type="submit" id="submit-reward-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg"><i class="fas fa-plus-square mr-2"></i>Thêm Phần Thưởng</button>
-                        <button type="button" id="cancel-edit-reward-btn" class="hidden bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg w-full transition-all duration-200 shadow-lg mt-2"><i class="fas fa-times-circle mr-2"></i>Hủy Chỉnh Sửa</button>
-                    </form>
-                    <div class="admin-rewards-list" id="current-rewards-list">
-                        <p class="text-gray-500 italic">Chưa có phần thưởng nào.</p>
-                    </div>
-                </div>
-                <!-- END REWARDS MANAGEMENT SECTION -->
             </div>
         </div>
     </div>
@@ -1190,61 +964,7 @@
         </div>
     </div>
 
-    <!-- Nút quà tặng -->
-    <button id="gift-button" title="Quay may mắn">
-        <i class="fas fa-gift"></i>
-    </button>
-
-    <!-- Modal Nhập Mã Quay -->
-    <div id="spin-voucher-entry-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
-        <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full relative modal-content">
-            <button id="close-spin-voucher-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
-            <h3 class="text-2xl font-bold mb-6 text-gray-900 text-center">Nhập Mã Vòng Quay</h3>
-            <div class="mb-4 text-left">
-                <label for="spin-voucher-code-input" class="block text-gray-700 text-sm font-semibold mb-2">Mã Vòng Quay:</label>
-                <input type="text" id="spin-voucher-code-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900" placeholder="Nhập mã vòng quay của bạn">
-            </div>
-            <p id="spin-voucher-error-message" class="text-red-500 text-sm mb-4 hidden"></p>
-            <button id="apply-spin-voucher-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:scale-105 active:scale-95">
-                Áp Dụng Mã
-            </button>
-        </div>
-    </div>
-
-    <!-- Modal Vòng Quay May Mắn -->
-    <div id="lucky-wheel-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
-        <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full relative modal-content max-h-[85vh] overflow-y-auto">
-            <button id="close-lucky-wheel-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
-            <h3 class="text-3xl font-bold mb-6 text-gray-900 text-center">Vòng Quay May Mắn</h3>
-
-            <div id="lucky-wheel-container">
-                <canvas id="lucky-wheel-canvas" width="300" height="300"></canvas>
-            </div>
-            <p id="spin-count-display" class="text-lg font-semibold text-gray-700">Lượt quay còn lại: <span id="current-spin-count">0</span></p>
-            <button id="spin-button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 shadow-lg">QUAY NGAY!</button>
-            <div id="prize-result" class="hidden">Bạn đã trúng: <span id="won-prize-name" class="font-bold text-blue-600"></span></div>
-            <div id="voucher-display-area" class="mt-4 p-4 border rounded-lg bg-yellow-50 hidden">
-                <p class="text-lg font-bold text-gray-800">Mã Voucher của bạn:</p>
-                <p id="won-voucher-code" class="text-2xl font-extrabold text-red-600 break-words"></p>
-                <p id="won-voucher-value" class="text-lg text-gray-700"></p>
-                <p id="won-voucher-expiry" class="text-sm text-gray-600"></p>
-                <button id="copy-voucher-btn" class="mt-3 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg"><i class="fas fa-copy mr-2"></i>Sao chép</button>
-            </div>
-            <div id="item-display-area" class="mt-4 p-4 border rounded-lg bg-blue-50 hidden">
-                <p class="text-lg font-bold text-gray-800">Sản phẩm bạn đã trúng:</p>
-                <img id="won-item-image" src="" onerror="this.onerror=null;this.src='https://placehold.co/100x100/cccccc/333333?text=Item';" class="mx-auto my-2 w-24 h-24 object-contain rounded-md">
-                <p id="won-item-name" class="text-xl font-bold text-purple-600"></p>
-                <p class="text-sm text-gray-700">Sản phẩm sẽ được thêm vào giỏ hàng của bạn. Vui lòng tạo đơn hàng để nhận quà!</p>
-            </div>
-            <p id="lucky-wheel-message" class="text-red-500 text-sm mt-4 hidden"></p>
-        </div>
-    </div>
-
-    <!-- Confetti Container -->
-    <div id="confetti-container" class="confetti-container hidden"></div>
-
-    <!-- Link to external JavaScript files -->
+    <!-- Link to external JavaScript file -->
     <script type="module" src="./script.js"></script>
-    <script type="module" src="./script2.js"></script>
 </body>
 </html>
