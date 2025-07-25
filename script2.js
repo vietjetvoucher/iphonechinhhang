@@ -317,13 +317,6 @@ function spin() {
     // `(2 * Math.PI) - (winningIndex * segmentArc + segmentArc / 2)` plus N full rotations.
     // A slight offset (e.g., PI/2) might be needed depending on how segments are drawn relative to the 'top'.
 
-    // Let's assume segment 0 is at 3 o'clock. We want the center of the winning segment to stop at 12 o'clock.
-    // The angle of the center of segment `winningIndex` is `winningIndex * arc + arc / 2`.
-    // The indicator is at `Math.PI * 1.5` (270 degrees) or `-Math.PI / 2` (90 degrees counter-clockwise from positive x-axis).
-    // If our drawing context treats 0 degrees as 3 o'clock, and we want it to land at 12 o'clock (top),
-    // which is `Math.PI / 2` counter-clockwise from 3 o'clock.
-    // So, the total rotation needed is `(currentAngle - targetSegmentCenterAngle + 2 * Math.PI) % (2 * Math.PI)`.
-
     const targetSegmentCenterAngle = winningIndex * segmentArc + segmentArc / 2;
     const indicatorAngle = Math.PI * 1.5; // Fixed indicator at 12 o'clock (270 degrees)
     
@@ -539,6 +532,24 @@ async function markSpinVoucherAsUsed(voucherCode) {
     }
 }
 
+// New function to check for shipping orders
+async function hasShippingOrdersForUser() {
+    if (!loggedInUser || !loggedInUser.id) {
+        return false;
+    }
+    try {
+        const shippingOrdersQuery = query(
+            collection(db, `artifacts/${appId}/users/${loggedInUser.id}/orders`),
+            where('status', '==', 'shipping')
+        );
+        const shippingOrdersSnap = await getDocs(shippingOrdersQuery);
+        return !shippingOrdersSnap.empty;
+    } catch (error) {
+        console.error("Error checking for shipping orders:", error);
+        return false;
+    }
+}
+
 
 // Simplified, grantSpinIfEligible now just manages UI state based on `spins`
 async function grantSpinIfEligible() {
@@ -637,6 +648,16 @@ applySpinVoucherBtn.addEventListener('click', async () => {
             hideLoading();
             return;
         }
+
+        // New condition: Check if user has any shipping orders
+        const userHasShippingOrders = await hasShippingOrdersForUser();
+        if (!userHasShippingOrders) {
+            spinVoucherErrorMessage.textContent = 'Bạn chưa hoàn thành nhiệm vụ. Vui lòng có đơn hàng đang vận chuyển để sử dụng mã quay này.';
+            spinVoucherErrorMessage.classList.remove('hidden');
+            hideLoading();
+            return;
+        }
+
 
         // Valid and unused spin voucher! Grant spins.
         let currentSpins = await getUserSpins();
@@ -1014,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("script2.js: Shop data (rewards, vouchers, products) updated from Firestore.");
             drawWheel(); // Redraw wheel if rewards change
             renderRewardsList(); // Re-render admin reward list
-            grantSpinIfEligible(); // Re-check eligibility whenever shop data changes
+            // No automatic grantSpinIfEligible here, spins are voucher-driven
         } else {
             shopDataCache.rewards = [];
             shopDataCache.vouchers = {};
