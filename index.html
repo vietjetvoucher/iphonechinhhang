@@ -23,7 +23,7 @@
             background-attachment: fixed;
             display: flex;
             flex-direction: column;
-            min-height: 10vh;
+            min-height: 100vh;
         }
         header {
             background-color: #FFD100;
@@ -308,11 +308,15 @@
             width: 300px;
             height: 300px;
             margin: 0 auto 20px;
+            border-radius: 50%;
+            overflow: hidden; /* Ensure wheel stays within bounds */
         }
         #lucky-wheel-canvas {
             border-radius: 50%;
             background-color: #f0f0f0;
             box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            transform: rotate(0deg); /* Initial state */
+            transform-origin: center center;
         }
         #spin-button {
             margin-top: 20px;
@@ -853,8 +857,8 @@
                             </select>
                         </div>
                         <div id="reward-value-container">
-                            <label for="new-reward-value" class="block text-gray-700 text-lg font-bold mb-2">Giá Trị Phần Thưởng (Mã Voucher/ID Sản phẩm):</label>
-                            <input type="text" id="new-reward-value" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Voucher: SALE10, Sản phẩm: product-id-123">
+                            <label for="new-reward-value" class="block text-gray-700 text-lg font-bold mb-2">Giá Trị Phần Thưởng (Mã Voucher/ID Sản phẩm/Số lượt quay):</label>
+                            <input type="text" id="new-reward-value" class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Voucher: SALE10, Sản phẩm: product-id-123, Lượt quay: 5">
                         </div>
                         <div id="reward-image-container">
                             <label for="new-reward-image" class="block text-gray-700 text-lg font-bold mb-2">URL Hình ảnh Phần Thưởng:</label>
@@ -1181,6 +1185,22 @@
     <button id="gift-button" title="Quay may mắn">
         <i class="fas fa-gift"></i>
     </button>
+
+    <!-- Modal Nhập Mã Quay -->
+    <div id="spin-voucher-entry-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
+        <div class="bg-white rounded-3xl shadow-2xl p-8 max-w-sm w-full relative modal-content">
+            <button id="close-spin-voucher-modal" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            <h3 class="text-2xl font-bold mb-6 text-gray-900 text-center">Nhập Mã Vòng Quay</h3>
+            <div class="mb-4 text-left">
+                <label for="spin-voucher-code-input" class="block text-gray-700 text-sm font-semibold mb-2">Mã Vòng Quay:</label>
+                <input type="text" id="spin-voucher-code-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent transition duration-200 text-gray-900" placeholder="Nhập mã vòng quay của bạn">
+            </div>
+            <p id="spin-voucher-error-message" class="text-red-500 text-sm mb-4 hidden"></p>
+            <button id="apply-spin-voucher-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 transform hover:scale-105 active:scale-95">
+                Áp Dụng Mã
+            </button>
+        </div>
+    </div>
 
     <!-- Modal Vòng Quay May Mắn -->
     <div id="lucky-wheel-modal" class="hidden fixed inset-0 flex items-center justify-center z-50 modal-overlay p-4">
