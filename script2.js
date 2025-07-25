@@ -9,14 +9,13 @@ import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, q
 // Global variables provided by the Canvas environment (assuming they are set up similarly to script.js)
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-    // User's provided Firebase configuration for local testing
-    apiKey: "AIzaSyAJmYFnLAhskjszeK5DZve4z0wRXrXl7Sc",
-    authDomain: "iphonechinhhang-47bdd.firebaseapp.com",
-    projectId: "iphonechinhhang-47bdd",
-    storageBucket: "iphonechinhhang-47bdd.firebasestorage.app",
-    messagingSenderId: "308005027963",
-    appId: "1:308005027963:web:35afe47c3ace690e38e2de",
-    measurementId: "G-PQ7450T99T"
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_AUTH_DOMAIN",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_STORAGE_BUCKET",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID",
+    measurementId: "YOUR_MEASUREMENT_ID"
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -28,8 +27,8 @@ let loggedInUser = null;
 let currentUserId = null;
 let shopDataCache = {
     products: [],
-    vouchers: {},
-    rewards: [] // New: Array to store lucky wheel rewards
+    vouchers: {}, // Vouchers are now directly used for spin codes as well
+    rewards: [] // Array to store lucky wheel rewards
 };
 
 // UI Elements
@@ -51,6 +50,14 @@ const wonItemName = document.getElementById('won-item-name');
 const spinCountDisplay = document.getElementById('spin-count-display');
 const currentSpinCountSpan = document.getElementById('current-spin-count');
 const luckyWheelMessage = document.getElementById('lucky-wheel-message');
+
+// New UI Elements for Spin Voucher Entry
+const spinVoucherEntryModal = document.getElementById('spin-voucher-entry-modal');
+const closeSpinVoucherModalBtn = document.getElementById('close-spin-voucher-modal');
+const spinVoucherCodeInput = document.getElementById('spin-voucher-code-input');
+const applySpinVoucherBtn = document.getElementById('apply-spin-voucher-btn');
+const spinVoucherErrorMessage = document.getElementById('spin-voucher-error-message');
+
 
 // Admin reward management elements
 const openManagementModalBtn = document.getElementById('open-management-modal-btn'); // From script.js, listen to its click indirectly
@@ -186,16 +193,17 @@ function drawWheel() {
     for (let i = 0; i < numSegments; i++) {
         const angle = i * arc;
         ctx.beginPath();
+        // Draw segment
         ctx.arc(luckyWheelCanvas.width / 2, luckyWheelCanvas.height / 2, luckyWheelCanvas.width / 2, angle, angle + arc);
         ctx.lineTo(luckyWheelCanvas.width / 2, luckyWheelCanvas.height / 2);
         // Fill based on index for variety
-        ctx.fillStyle = `hsl(${i * 60}, 70%, 70%)`;
+        ctx.fillStyle = `hsl(${i * (360 / numSegments) + 30}, 70%, 70%)`; // Dynamic color
         ctx.fill();
         ctx.stroke();
 
         ctx.save();
         ctx.translate(luckyWheelCanvas.width / 2, luckyWheelCanvas.height / 2);
-        ctx.rotate(angle + arc / 2 + Math.PI / 2); // Rotate text to be upright
+        ctx.rotate(angle + arc / 2 + Math.PI / 2); // Rotate text to be upright, adjusted for segment position
         ctx.fillStyle = '#fff';
         ctx.font = '16px Inter, sans-serif';
         ctx.textAlign = 'center';
@@ -209,9 +217,12 @@ function drawWheel() {
         if (rewards[i].image) {
             const img = new Image();
             img.onload = () => {
+                // To avoid drawing multiple times on redraws, consider clearing a specific area or managing images better
+                // For simplicity here, we'll redraw on load.
+                // Redraw the specific segment with the image
                 ctx.save();
                 ctx.translate(luckyWheelCanvas.width / 2, luckyWheelCanvas.height / 2);
-                ctx.rotate(angle + arc / 2 + Math.PI / 2);
+                ctx.rotate(angle + arc / 2 + Math.PI / 2); // Same rotation as text
                 const imgSize = 40; // Size of the image
                 const imgX = -imgSize / 2;
                 const imgY = -luckyWheelCanvas.width / 2 + 55; // Position below text
@@ -235,16 +246,22 @@ function drawWheel() {
         ctx.restore();
     }
 
-    drawIndicator(); // Draw the pointer
+    drawIndicator(); // Draw the fixed pointer
 }
 
 function drawIndicator() {
+    // Draw a fixed triangle indicator at the top center of the canvas, pointing downwards
+    // This indicator will be fixed, and the wheel will spin underneath it.
+    ctx.save();
+    ctx.translate(luckyWheelCanvas.width / 2, luckyWheelCanvas.height / 2); // Move origin to center of wheel
     ctx.beginPath();
-    ctx.moveTo(luckyWheelCanvas.width - 15, luckyWheelCanvas.height / 2 - 10);
-    ctx.lineTo(luckyWheelCanvas.width - 15, luckyWheelCanvas.height / 2 + 10);
-    ctx.lineTo(luckyWheelCanvas.width, luckyWheelCanvas.height / 2);
+    ctx.moveTo(0, -luckyWheelCanvas.height / 2 - 20); // Top point, above the wheel
+    ctx.lineTo(-15, -luckyWheelCanvas.height / 2 + 0); // Bottom-left point, just touching the wheel edge
+    ctx.lineTo(15, -luckyWheelCanvas.height / 2 + 0); // Bottom-right point, just touching the wheel edge
+    ctx.closePath();
     ctx.fillStyle = 'red';
     ctx.fill();
+    ctx.restore();
 }
 
 function spin() {
@@ -256,10 +273,9 @@ function spin() {
 
     spinTime = 0;
     spinTimeTotal = Math.random() * 3000 + 4000; // Spin for 4-7 seconds
-    spinAngleStart = Math.random() * 10 + 10; // Random initial speed
-    spinDirection = Math.random() > 0.5 ? 1 : -1; // Random spin direction
+    spinAngleStart = 10; // Initial spin speed. This will be adjusted to ensure a specific landing.
 
-    // Determine the winning segment index
+    // Determine the winning segment index based on chances
     let winningIndex = -1;
     const totalChance = shopDataCache.rewards.reduce((sum, reward) => sum + reward.chance, 0);
 
@@ -275,9 +291,9 @@ function spin() {
         }
     }
 
+    // Fallback if no prize is won due to chance distribution, or if rewards list is empty.
+    // If rewards are empty, this should have been caught earlier.
     if (winningIndex === -1 && shopDataCache.rewards.length > 0) {
-        // If no prize is won due to chances, default to "Thank you" or a random one
-        // or a specific "Chúc bạn may mắn lần sau" reward if it exists.
         const thankYouIndex = shopDataCache.rewards.findIndex(r => r.type === 'thankyou');
         winningIndex = thankYouIndex !== -1 ? thankYouIndex : Math.floor(Math.random() * shopDataCache.rewards.length);
     } else if (shopDataCache.rewards.length === 0) {
@@ -286,122 +302,61 @@ function spin() {
         return;
     }
 
-    // Calculate the target angle for the winning segment
-    const segmentAngle = arc; // Angle of each segment
-    const targetCenterAngle = (winningIndex * segmentAngle) + (segmentAngle / 2); // Center of the winning segment
+    // Calculate the target angle for the winning segment to land at the indicator.
+    const numSegments = shopDataCache.rewards.length;
+    const segmentArc = 2 * Math.PI / numSegments; // Angle of each segment
+    
+    // The indicator points at the "12 o'clock" position (which is -Math.PI / 2 or 3 * Math.PI / 2 radians).
+    // The segments are drawn starting from 0 radians (3 o'clock).
+    // So, we need the *center* of the winning segment (`winningIndex * segmentArc + segmentArc / 2`)
+    // to align with the indicator's position relative to the wheel's starting point.
+    // Let's say the indicator is at the top (0 radians or 2*PI in the drawing context)
+    // and the wheel segments start from the right (0 radians in drawing context).
+    // The segment `i` is from `i*arc` to `(i+1)*arc`. Its center is `i*arc + arc/2`.
+    // We want this center to align with the top. So, the total rotation needed will be:
+    // `(2 * Math.PI) - (winningIndex * segmentArc + segmentArc / 2)` plus N full rotations.
+    // A slight offset (e.g., PI/2) might be needed depending on how segments are drawn relative to the 'top'.
 
-    // Randomize the exact stopping point within the segment
-    const randomOffset = (Math.random() * 0.8 - 0.4) * segmentAngle; // +/- 40% of segment
-    let desiredAngle = targetCenterAngle + randomOffset;
+    // Let's assume segment 0 is at 3 o'clock. We want the center of the winning segment to stop at 12 o'clock.
+    // The angle of the center of segment `winningIndex` is `winningIndex * arc + arc / 2`.
+    // The indicator is at `Math.PI * 1.5` (270 degrees) or `-Math.PI / 2` (90 degrees counter-clockwise from positive x-axis).
+    // If our drawing context treats 0 degrees as 3 o'clock, and we want it to land at 12 o'clock (top),
+    // which is `Math.PI / 2` counter-clockwise from 3 o'clock.
+    // So, the total rotation needed is `(currentAngle - targetSegmentCenterAngle + 2 * Math.PI) % (2 * Math.PI)`.
 
-    // Adjust for the pointer's position (which is at the right edge)
-    // The canvas is rotated, so the "top" of the wheel (0 radians) is at 12 o'clock.
-    // The pointer is at 3 o'clock (PI/2 radians).
-    // So, we want the *center* of the winning segment to align with PI/2.
-    // The current rotation `luckyWheelCanvas.style.transform` is what controls the wheel's visual position.
-    // We need to calculate the *total* rotation required.
-    const currentRotationDeg = parseFloat(luckyWheelCanvas.style.transform.replace('rotate(', '').replace('deg)', '')) || 0;
-    const currentRotationRad = currentRotationDeg * Math.PI / 180;
+    const targetSegmentCenterAngle = winningIndex * segmentArc + segmentArc / 2;
+    const indicatorAngle = Math.PI * 1.5; // Fixed indicator at 12 o'clock (270 degrees)
+    
+    // Calculate the required rotation so that the targetSegmentCenterAngle aligns with the indicatorAngle
+    let rotationToAlign = indicatorAngle - targetSegmentCenterAngle;
 
-    // The angle from the "start" of the wheel (0 degrees) to the winning segment center (relative to the wheel's current rotation)
-    // is (winningIndex * arc) + (arc / 2)
-    // We want the pointer (at 90 degrees/PI/2 radians) to point to this.
-    // So, final stop angle should be (N*360 + 90) - (winningIndex*arc + arc/2)
-    // This makes the *start* of the spinning angle irrelevant, only the final landing matters.
+    // Normalize rotationToAlign to be within 0 to 2*PI
+    rotationToAlign = (rotationToAlign + 2 * Math.PI) % (2 * Math.PI);
 
-    // Let's simplify: we want the pointer to land on the center of the winning segment.
-    // The pointer is at Math.PI / 2 (90 degrees).
-    // The segments are drawn starting from 0 (3 o'clock).
-    // So, to have the pointer land on segment `winningIndex`, we need the wheel to rotate such that
-    // the segment's center `(winningIndex * arc + arc / 2)` aligns with `Math.PI / 2`.
-    // The total rotation needed will be `(Math.PI / 2) - (winningIndex * arc + arc / 2) + N * 2 * Math.PI`.
-    // We choose N large enough to make it spin multiple times.
+    // Add multiple full rotations to make it spin sufficiently
+    const numberOfFullSpins = 5; // Spin at least 5 full times
+    let finalRotationRadians = rotationToAlign + (numberOfFullSpins * 2 * Math.PI);
 
-    // Calculate the normalized angle for the winning segment (where 0 is 3 o'clock)
-    const normalizedWinningAngle = (winningIndex * arc + arc / 2);
+    // Apply a random offset within a small margin of the target to make it less predictable
+    const randomStopOffset = (Math.random() - 0.5) * (segmentArc * 0.5); // +/- 25% of a segment
+    finalRotationRadians += randomStopOffset;
 
-    // We want this normalizedWinningAngle to align with the pointer's position (which is at Math.PI / 2 from drawing origin).
-    // So the final wheel rotation angle should be (Math.PI / 2) - normalizedWinningAngle.
-    // Add many full rotations to ensure it spins a lot.
-    const fullRotations = 10; // Spin at least 10 full turns
-    let finalAngle = (fullRotations * 2 * Math.PI) + (Math.PI / 2 - normalizedWinningAngle) + randomOffset; // Add random offset for more natural feel
+    // Store the final calculated rotation (in degrees) in the canvas style
+    luckyWheelCanvas.style.transition = `transform ${spinTimeTotal / 1000}s ease-out`; // Smooth deceleration
+    luckyWheelCanvas.style.transform = `rotate(-${finalRotationRadians * 180 / Math.PI}deg)`; // Negative for clockwise spin effect
 
-    // Make sure finalAngle is positive to prevent negative spin direction issues with transform
-    while (finalAngle < 0) {
-        finalAngle += (2 * Math.PI);
-    }
-
-    const startAngle = parseFloat(luckyWheelCanvas.style.transform.replace('rotate(', '').replace('deg)', '')) * Math.PI / 180 || 0;
-    spinAngleStart = (finalAngle - startAngle) / spinTimeTotal; // Calculate speed needed to reach final angle
-
-
-    spinTime = 0;
-    rotateWheel(); // Start the animation
+    // Set a timeout to call stopRotateWheel after the transition finishes
+    spinTimeout = setTimeout(() => {
+        stopRotateWheel(winningIndex); // Pass winning index directly
+    }, spinTimeTotal);
 }
 
 
-function rotateWheel() {
-    spinTime += 30; // Increment by frame time (approx 30ms for 30fps)
-    if (spinTime >= spinTimeTotal) {
-        stopRotateWheel();
-        return;
-    }
-    const spinAngle = spinAngleStart * (spinTimeTotal - spinTime); // Decelerating speed
-    const currentRotation = parseFloat(luckyWheelCanvas.style.transform.replace('rotate(', '').replace('deg)', '')) || 0;
-    const newRotation = currentRotation + (spinAngle * 180 / Math.PI * spinDirection);
-
-    luckyWheelCanvas.style.transform = `rotate(${newRotation}deg)`;
-    spinTimeout = setTimeout(rotateWheel, 30);
-}
-
-function stopRotateWheel() {
-    clearTimeout(spinTimeout);
+function stopRotateWheel(winningIndex) {
+    clearTimeout(spinTimeout); // Clear any lingering timeout
     spinning = false;
 
-    // Get the final rotation in degrees
-    const finalRotationDeg = parseFloat(luckyWheelCanvas.style.transform.replace('rotate(', '').replace('deg)', '')) % 360;
-    // Normalize to 0-360 degrees
-    const normalizedRotationDeg = (finalRotationDeg + 360) % 360;
-
-    // Convert to radians (where 0 is 3 o'clock)
-    const normalizedRotationRad = normalizedRotationDeg * Math.PI / 180;
-
-    // Calculate which segment the pointer is on
-    // The pointer is at 90 degrees (Math.PI / 2).
-    // The segments are drawn clockwise starting from 0 degrees (3 o'clock).
-    // We need to find which segment the current *pointer* position falls into on the *static* wheel.
-
-    const numSegments = shopDataCache.rewards.length;
-    if (numSegments === 0) {
-        showMessage('Không có phần thưởng để xác định.', 'error');
-        return;
-    }
-    const segmentArc = (2 * Math.PI) / numSegments;
-
-    // The angle measured from the pointer (90 deg) clockwise to the segment start.
-    // If wheel is rotated by `R` radians, a point `P` on the wheel is now at `P+R`.
-    // The pointer is fixed at `PI/2`. So we're looking for `P + R = PI/2 + N*2PI`.
-    // So, `P = PI/2 - R`. Normalize P to be between 0 and 2PI.
-    let landingAngle = (Math.PI / 2 - normalizedRotationRad + 2 * Math.PI) % (2 * Math.PI);
-
-    // Determine the winning segment index based on landingAngle
-    let winningIndex = -1;
-    for (let i = 0; i < numSegments; i++) {
-        const startAngleOfSegment = (i * segmentArc);
-        const endAngleOfSegment = (i * segmentArc) + segmentArc;
-        if (landingAngle >= startAngleOfSegment && landingAngle < endAngleOfSegment) {
-            winningIndex = i;
-            break;
-        }
-    }
-
-    if (winningIndex === -1) {
-        // Fallback in case of floating point precision issues near boundaries
-        winningIndex = Math.floor(landingAngle / segmentArc);
-        if (winningIndex >= numSegments) winningIndex = numSegments - 1;
-        if (winningIndex < 0) winningIndex = 0;
-    }
-
+    // The winningIndex is already known from the spin() function, so we can use it directly.
     const wonReward = shopDataCache.rewards[winningIndex];
     displayWonPrize(wonReward);
     handleRewardOutcome(wonReward);
@@ -446,21 +401,8 @@ async function handleRewardOutcome(reward) {
         return;
     }
 
-    // Set user spin status to true
-    try {
-        const userRewardDocRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/rewardStatus`, 'spinEligibility');
-        await setDoc(userRewardDocRef, { hasSpun: true, lastSpinDate: new Date().toISOString() }, { merge: true });
-        console.log("User spin status updated to hasSpun: true");
-    } catch (error) {
-        console.error("Error updating user spin status:", error);
-        showMessage(`Lỗi khi cập nhật trạng thái quay: ${error.message}`, 'error');
-    }
-
     // Handle reward specific actions
     if (reward.type === 'voucher' && reward.value) {
-        // Voucher is simply displayed. The user can copy it.
-        // We don't add it to their "vouchers" collection here, as vouchers are global.
-        // The user manually applies it during product purchase.
         showMessage(`Bạn đã trúng voucher: ${reward.value}!`, 'success');
     } else if (reward.type === 'item' && reward.value) {
         // Add item to user's cart
@@ -469,9 +411,6 @@ async function handleRewardOutcome(reward) {
         const product = shopDataCache.products.find(p => p.id === productId);
 
         if (product) {
-            // Check if userCartCache is available (from script.js)
-            // If script.js's userCartCache is not directly accessible, we need to fetch it.
-            // For simplicity, let's assume it's available or we refetch it.
             let userCartData = [];
             try {
                 const cartDocSnap = await getDoc(doc(db, `artifacts/${appId}/users/${loggedInUser.id}/cart`, 'currentCart'));
@@ -491,23 +430,20 @@ async function handleRewardOutcome(reward) {
             if (existingCartItemIndex > -1) {
                 userCartData[existingCartItemIndex].quantity += itemQuantity;
             } else {
-                // Determine priceAtAddToCart and originalPriceForVAT for the item
-                let priceAtAddToCart = product.basePrice; // Default to base price
+                let priceAtAddToCart = product.basePrice;
                 let originalPriceForVAT = product.basePrice;
 
-                // If product has variants, try to find a default or first variant's pricing
                 if (product.variants && product.variants.length > 0) {
-                    const defaultVariant = product.variants[0]; // Or choose a specific default
+                    const defaultVariant = product.variants[0];
                     priceAtAddToCart += (defaultVariant.priceImpact || 0);
                     originalPriceForVAT += (defaultVariant.priceImpact || 0);
                 }
-                // No voucher applied for prize items added to cart automatically
 
                 userCartData.push({
                     productId: product.id,
                     productName: product.name,
-                    productImage: reward.image || product.image, // Use reward image if available, else product image
-                    selectedColor: null, // Prize items may not have specific color/storage selected
+                    productImage: reward.image || product.image,
+                    selectedColor: null,
                     selectedStorage: null,
                     priceAtAddToCart: priceAtAddToCart,
                     originalPriceForVAT: originalPriceForVAT,
@@ -518,8 +454,6 @@ async function handleRewardOutcome(reward) {
             try {
                 await setDoc(doc(db, `artifacts/${appId}/users/${loggedInUser.id}/cart`, 'currentCart'), { items: userCartData });
                 showMessage(`Sản phẩm "${product.name}" đã được thêm vào giỏ hàng của bạn!`, 'success');
-                // Trigger update of cart count in script.js's UI if possible, or reload needed data
-                // For now, assuming script.js updates on its own on `onSnapshot`
             } catch (error) {
                 console.error("Error adding item to cart from reward:", error);
                 showMessage(`Lỗi khi thêm sản phẩm "${product.name}" vào giỏ hàng.`, 'error');
@@ -528,27 +462,32 @@ async function handleRewardOutcome(reward) {
             showMessage(`Không tìm thấy thông tin sản phẩm cho phần thưởng: ${reward.name}`, 'error');
         }
     } else if (reward.type === 'freespin') {
-        // Give another spin
         let currentSpins = await getUserSpins();
-        currentSpins++;
+        currentSpins += parseInt(reward.value, 10); // Reward value is now number of spins
         await setUserSpins(currentSpins);
-        showMessage('Chúc mừng! Bạn đã nhận được một lượt quay miễn phí!', 'success');
+        showMessage(`Chúc mừng! Bạn đã nhận được ${reward.value} lượt quay miễn phí!`, 'success');
         updateSpinCountUI();
-        spinButton.disabled = false; // Enable spin button again
-        giftButton.classList.remove('disabled'); // Enable gift button again
+        spinButton.disabled = false;
+        giftButton.classList.remove('disabled');
     } else if (reward.type === 'thankyou') {
         showMessage('Chúc bạn may mắn lần sau!', 'info');
     }
+
+    // Decrement spin count AFTER handling reward outcome (if it wasn't a freespin)
+    // This logic is now handled at the start of spin()
+    // However, if the reward wasn't a freespin, the spins were already decremented.
+    // So we just update the UI here.
+    updateSpinCountUI();
 }
 
-// --- User Spin Eligibility & Count ---
+// --- User Spin Eligibility & Count (now managed by vouchers) ---
 async function getUserSpins() {
     if (!loggedInUser || !loggedInUser.id) {
         return 0; // No spins for logged out users
     }
     try {
-        const userRewardDocRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/rewardStatus`, 'spinEligibility');
-        const docSnap = await getDoc(userRewardDocRef);
+        const userSpinStatusDocRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/rewardStatus`, 'spinEligibility');
+        const docSnap = await getDoc(userSpinStatusDocRef);
         if (docSnap.exists()) {
             const data = docSnap.data();
             return data.spins || 0;
@@ -565,93 +504,48 @@ async function setUserSpins(count) {
         return;
     }
     try {
-        const userRewardDocRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/rewardStatus`, 'spinEligibility');
-        await setDoc(userRewardDocRef, { spins: count }, { merge: true });
+        const userSpinStatusDocRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/rewardStatus`, 'spinEligibility');
+        await setDoc(userSpinStatusDocRef, { spins: count }, { merge: true });
         console.log(`User ${loggedInUser.id} spins set to ${count}`);
     } catch (error) {
         console.error("Error setting user spins:", error);
     }
 }
 
-async function hasUserSpunForCurrentOrder() {
+async function hasUserUsedSpinVoucher(voucherCode) {
     if (!loggedInUser || !loggedInUser.id) {
-        return true; // No orders, no spins
+        return true; // Assume used if not logged in to prevent guest abuse
     }
     try {
-        const userRewardDocRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/rewardStatus`, 'spinEligibility');
-        const docSnap = await getDoc(userRewardDocRef);
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            return data.hasSpun || false; // Default to false if not set
-        }
-        return false;
+        const usedVoucherDocRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/usedVouchers`, voucherCode);
+        const docSnap = await getDoc(usedVoucherDocRef);
+        return docSnap.exists();
     } catch (error) {
-        console.error("Error checking user spin status:", error);
-        return true; // Assume true to prevent unlimited spins on error
+        console.error("Error checking if spin voucher was used:", error);
+        return true; // Err on the side of caution
     }
 }
 
-async function grantSpinIfEligible() {
+async function markSpinVoucherAsUsed(voucherCode) {
     if (!loggedInUser || !loggedInUser.id) {
         return;
     }
-
     try {
-        const shippingOrdersQuery = query(
-            collection(db, `artifacts/${appId}/users/${loggedInUser.id}/orders`),
-            where('status', '==', 'shipping')
-        );
-        const shippingOrdersSnap = await getDocs(shippingOrdersQuery);
-
-        const userRewardDocRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/rewardStatus`, 'spinEligibility');
-        const userRewardSnap = await getDoc(userRewardDocRef);
-        const userData = userRewardSnap.exists() ? userRewardSnap.data() : { hasSpun: false, lastSpinOrderId: null, spins: 0 };
-
-        let eligibleForSpin = false;
-        let mostRecentShippingOrderId = null;
-
-        if (!shippingOrdersSnap.empty) {
-            // Find the most recent shipping order
-            const sortedShippingOrders = shippingOrdersSnap.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
-
-            mostRecentShippingOrderId = sortedShippingOrders[0].id;
-
-            // If the user has a shipping order and hasn't spun for this specific order ID yet
-            if (userData.lastSpinOrderId !== mostRecentShippingOrderId) {
-                eligibleForSpin = true;
-            } else if (userData.spins > 0) {
-                // If they have existing spins from previous grants (e.g., from a freespin reward)
-                eligibleForSpin = true;
-            }
-        }
-
-        if (eligibleForSpin && userData.spins === 0) { // Only grant if no existing spins
-            await setUserSpins(1);
-            await setDoc(userRewardDocRef, {
-                hasSpun: false, // Reset hasSpun when a new eligible order is found
-                lastSpinOrderId: mostRecentShippingOrderId,
-                spins: 1
-            }, { merge: true });
-            console.log("Granted 1 spin due to new shipping order.");
-        } else if (!eligibleForSpin && userData.spins > 0 && userData.lastSpinOrderId === mostRecentShippingOrderId) {
-             // If user has spins but no new eligible order, don't remove existing spins.
-             // This covers cases where freespin grants keep spins > 0
-             console.log("User has existing spins or no new eligible order, no new spin granted.");
-        } else if (!eligibleForSpin && userData.spins === 0) {
-             // No eligible shipping order and no existing spins, disable button
-             console.log("No eligible shipping order, no new spin granted.");
-             await setUserSpins(0); // Ensure spins are 0 if not eligible
-             await setDoc(userRewardDocRef, { hasSpun: false, lastSpinOrderId: null, spins: 0 }, { merge: true }); // Reset
-        }
-        updateSpinCountUI();
-        updateGiftButtonState();
-
+        const usedVoucherDocRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/usedVouchers`, voucherCode);
+        await setDoc(usedVoucherDocRef, { redeemedAt: new Date().toISOString() });
+        console.log(`Spin voucher ${voucherCode} marked as used by user ${loggedInUser.id}`);
     } catch (error) {
-        console.error("Error granting spin eligibility:", error);
-        showMessage(`Lỗi khi kiểm tra lượt quay: ${error.message}`, 'error');
+        console.error("Error marking spin voucher as used:", error);
     }
+}
+
+
+// Simplified, grantSpinIfEligible now just manages UI state based on `spins`
+async function grantSpinIfEligible() {
+    // This function is now mainly for updating UI state based on available spins,
+    // not for granting spins based on orders. Spins are granted via vouchers.
+    updateSpinCountUI();
+    updateGiftButtonState();
 }
 
 
@@ -665,44 +559,121 @@ function updateSpinCountUI() {
         } else if (spins === 0 && !spinning) {
             spinButton.disabled = true;
             spinButton.textContent = 'Hết lượt quay';
-            luckyWheelMessage.textContent = 'Bạn không có lượt quay nào. Vui lòng tạo đơn hàng mới để nhận lượt quay.';
+            luckyWheelMessage.textContent = 'Bạn không có lượt quay nào. Vui lòng nhập mã quay hợp lệ.';
             luckyWheelMessage.classList.remove('hidden');
         }
     });
 }
 
 function updateGiftButtonState() {
-    getUserSpins().then(spins => {
-        if (spins > 0) {
-            giftButton.classList.remove('disabled');
-        } else {
-            giftButton.classList.add('disabled');
-        }
-    });
+    // Gift button is now always enabled to open the voucher input modal
+    giftButton.classList.remove('disabled'); // Always allow opening the voucher input modal
 }
 
 // --- Event Listeners ---
 giftButton.addEventListener('click', async () => {
     if (!loggedInUser || !loggedInUser.id) {
         showMessage('Vui lòng đăng nhập để tham gia vòng quay may mắn.', 'info');
-        // This assumes openModal exists in the global scope or script.js
-        document.getElementById('login-register-modal').classList.remove('hidden'); // Directly open login modal
+        document.getElementById('login-register-modal').classList.remove('hidden');
         document.getElementById('login-register-modal').classList.add('active');
         return;
     }
-    // Check if user has shipping orders and hasn't spun yet
-    await grantSpinIfEligible(); // Check eligibility and grant spin if needed
-    updateSpinCountUI(); // Update UI immediately after grant check
+    // Open the spin voucher entry modal first
+    spinVoucherCodeInput.value = ''; // Clear previous input
+    spinVoucherErrorMessage.classList.add('hidden'); // Hide any previous errors
+    openModal(spinVoucherEntryModal);
+});
 
-    openModal(luckyWheelModal);
-    if (shopDataCache.rewards.length > 0) {
-        drawWheel(); // Initial draw of the wheel
-    } else {
-        luckyWheelMessage.textContent = 'Chưa có phần thưởng nào được cấu hình. Vui lòng liên hệ Admin.';
-        luckyWheelMessage.classList.remove('hidden');
-        spinButton.disabled = true;
+// New Event Listener for Spin Voucher Entry Modal
+closeSpinVoucherModalBtn.addEventListener('click', () => closeModal(spinVoucherEntryModal));
+spinVoucherEntryModal.addEventListener('click', (e) => {
+    if (e.target === spinVoucherEntryModal) closeModal(spinVoucherEntryModal);
+});
+
+applySpinVoucherBtn.addEventListener('click', async () => {
+    if (!loggedInUser || !loggedInUser.id) {
+        showMessage('Vui lòng đăng nhập để áp dụng mã quay.', 'info');
+        return;
+    }
+
+    const voucherCode = spinVoucherCodeInput.value.trim().toUpperCase();
+    if (!voucherCode) {
+        spinVoucherErrorMessage.textContent = 'Vui lòng nhập mã vòng quay.';
+        spinVoucherErrorMessage.classList.remove('hidden');
+        return;
+    }
+
+    showLoading();
+    try {
+        const voucher = shopDataCache.vouchers[voucherCode];
+
+        if (!voucher) {
+            spinVoucherErrorMessage.textContent = 'Mã vòng quay không hợp lệ.';
+            spinVoucherErrorMessage.classList.remove('hidden');
+            hideLoading();
+            return;
+        }
+
+        if (voucher.type !== 'spin') {
+            spinVoucherErrorMessage.textContent = 'Đây không phải là mã vòng quay may mắn.';
+            spinVoucherErrorMessage.classList.remove('hidden');
+            hideLoading();
+            return;
+        }
+
+        const now = new Date();
+        const expiryTime = new Date(voucher.expiry);
+        if (expiryTime <= now) {
+            spinVoucherErrorMessage.textContent = 'Mã vòng quay đã hết hạn.';
+            spinVoucherErrorMessage.classList.remove('hidden');
+            hideLoading();
+            return;
+        }
+
+        const alreadyUsed = await hasUserUsedSpinVoucher(voucherCode);
+        if (alreadyUsed) {
+            spinVoucherErrorMessage.textContent = 'Bạn đã sử dụng mã vòng quay này rồi.';
+            spinVoucherErrorMessage.classList.remove('hidden');
+            hideLoading();
+            return;
+        }
+
+        // Valid and unused spin voucher! Grant spins.
+        let currentSpins = await getUserSpins();
+        const spinsToGrant = parseInt(voucher.value, 10);
+        if (isNaN(spinsToGrant) || spinsToGrant <= 0) {
+            spinVoucherErrorMessage.textContent = 'Mã vòng quay này không có giá trị lượt quay hợp lệ.';
+            spinVoucherErrorMessage.classList.remove('hidden');
+            hideLoading();
+            return;
+        }
+
+        await setUserSpins(currentSpins + spinsToGrant);
+        await markSpinVoucherAsUsed(voucherCode);
+
+        showMessage(`Bạn đã nhận được ${spinsToGrant} lượt quay từ mã ${voucherCode}!`, 'success');
+        closeModal(spinVoucherEntryModal);
+        updateSpinCountUI(); // Update spin count display immediately
+        
+        // Now open the lucky wheel modal
+        openModal(luckyWheelModal);
+        if (shopDataCache.rewards.length > 0) {
+            drawWheel(); // Initial draw of the wheel
+        } else {
+            luckyWheelMessage.textContent = 'Chưa có phần thưởng nào được cấu hình. Vui lòng liên hệ Admin.';
+            luckyWheelMessage.classList.remove('hidden');
+            spinButton.disabled = true;
+        }
+
+    } catch (error) {
+        console.error("Error applying spin voucher:", error);
+        spinVoucherErrorMessage.textContent = `Lỗi: ${error.message}`;
+        spinVoucherErrorMessage.classList.remove('hidden');
+    } finally {
+        hideLoading();
     }
 });
+
 
 closeLuckyWheelModalBtn.addEventListener('click', () => {
     closeModal(luckyWheelModal);
@@ -714,7 +685,12 @@ closeLuckyWheelModalBtn.addEventListener('click', () => {
     spinButton.textContent = 'QUAY NGAY!'; // Reset button text
     if (spinTimeout) {
         clearTimeout(spinTimeout);
-        luckyWheelCanvas.style.transform = 'rotate(0deg)'; // Reset wheel rotation
+        // Reset rotation visually without transition after modal closes
+        luckyWheelCanvas.style.transition = 'none';
+        luckyWheelCanvas.style.transform = 'rotate(0deg)';
+        setTimeout(() => {
+            luckyWheelCanvas.style.transition = ''; // Re-enable transition for next spin
+        }, 50);
     }
 });
 
@@ -729,7 +705,11 @@ luckyWheelModal.addEventListener('click', (e) => {
         spinButton.textContent = 'QUAY NGAY!';
         if (spinTimeout) {
             clearTimeout(spinTimeout);
+            luckyWheelCanvas.style.transition = 'none';
             luckyWheelCanvas.style.transform = 'rotate(0deg)';
+            setTimeout(() => {
+                luckyWheelCanvas.style.transition = '';
+            }, 50);
         }
     }
 });
@@ -740,7 +720,7 @@ spinButton.addEventListener('click', async () => {
     let spinsRemaining = await getUserSpins();
 
     if (spinsRemaining <= 0) {
-        luckyWheelMessage.textContent = 'Bạn không có lượt quay nào. Vui lòng tạo đơn hàng mới để nhận lượt quay.';
+        luckyWheelMessage.textContent = 'Bạn không có lượt quay nào. Vui lòng nhập mã quay hợp lệ.';
         luckyWheelMessage.classList.remove('hidden');
         spinButton.disabled = true;
         return;
@@ -754,9 +734,9 @@ spinButton.addEventListener('click', async () => {
     }
 
     spinning = true;
-    spinsRemaining--;
+    spinsRemaining--; // Decrement spin count BEFORE the spin starts
     await setUserSpins(spinsRemaining);
-    updateSpinCountUI();
+    updateSpinCountUI(); // Update UI immediately after decrementing
     spin();
 });
 
@@ -775,19 +755,15 @@ copyVoucherBtn.addEventListener('click', () => {
 // --- Admin Reward Management Logic ---
 
 // Listen to the management modal opening (from script.js)
-// This is a bit of a workaround since script.js controls the modal,
-// but it works for modularity without deeply coupling.
-// A better long-term solution might involve a global event bus or passing functions.
 const originalOpenManagementModalFn = openManagementModalBtn.onclick;
 openManagementModalBtn.onclick = async () => {
     if (originalOpenManagementModalFn) {
         originalOpenManagementModalFn(); // Call the original handler in script.js
     }
-    // Only render rewards list if user is admin
     if (loggedInUser && loggedInUser.isAdmin) {
         renderRewardsList();
-        resetAddEditRewardForm(); // Reset form when modal opens
-        updateRewardFormVisibility(); // Initial visibility check for reward value/image inputs
+        resetAddEditRewardForm();
+        updateRewardFormVisibility();
     }
 };
 
@@ -795,8 +771,21 @@ newRewardTypeSelect.addEventListener('change', updateRewardFormVisibility);
 
 function updateRewardFormVisibility() {
     const selectedType = newRewardTypeSelect.value;
-    if (selectedType === 'voucher' || selectedType === 'item') {
+    if (selectedType === 'voucher' || selectedType === 'item' || selectedType === 'freespin') { // 'freespin' now needs a value
         rewardValueContainer.classList.remove('hidden');
+        if (selectedType === 'freespin') {
+            newRewardValueInput.placeholder = 'Số lượt quay';
+            newRewardValueInput.type = 'number';
+            newRewardValueInput.min = '1';
+        } else if (selectedType === 'voucher') {
+            newRewardValueInput.placeholder = 'Mã Voucher';
+            newRewardValueInput.type = 'text';
+            newRewardValueInput.min = ''; // Remove min attribute
+        } else if (selectedType === 'item') {
+            newRewardValueInput.placeholder = 'ID Sản phẩm';
+            newRewardValueInput.type = 'text';
+            newRewardValueInput.min = ''; // Remove min attribute
+        }
     } else {
         rewardValueContainer.classList.add('hidden');
     }
@@ -821,8 +810,8 @@ async function renderRewardsList() {
         rewardDiv.innerHTML = `
             ${reward.image ? `<img src="${reward.image}" onerror="this.onerror=null;this.src='https://placehold.co/40x40/cccccc/333333?text=Reward';" alt="${reward.name}">` : ''}
             <div class="info">
-                <p class="font-semibold text-gray-900">${reward.name} (${reward.type})</p>
-                <p>Giá trị: ${reward.value || 'N/A'}</p>
+                <p class="font-semibold text-gray-900">${reward.name} (${reward.type === 'freespin' ? 'Lượt quay' : reward.type})</p>
+                <p>Giá trị: ${reward.type === 'freespin' ? `${reward.value} lượt` : (reward.value || 'N/A')}</p>
                 <p>Tỷ lệ: ${reward.chance}%</p>
             </div>
             <div class="actions">
@@ -873,7 +862,7 @@ addEditRewardForm.addEventListener('submit', async (e) => {
     const rewardId = editRewardIdInput.value;
     const name = newRewardNameInput.value.trim();
     const type = newRewardTypeSelect.value;
-    const value = newRewardValueInput.value.trim();
+    let value = newRewardValueInput.value.trim(); // Use let for value
     const image = newRewardImageInput.value.trim();
     const chance = parseFloat(newRewardChanceInput.value);
 
@@ -883,10 +872,26 @@ addEditRewardForm.addEventListener('submit', async (e) => {
         return;
     }
 
+    if (type === 'freespin') {
+        value = parseInt(value, 10); // Convert to integer for freespin count
+        if (isNaN(value) || value <= 0) {
+            showMessage('Số lượt quay phải là một số nguyên dương.', 'error');
+            hideLoading();
+            return;
+        }
+    } else if (type !== 'thankyou') { // For voucher and item types
+        if (!value) {
+            showMessage('Giá trị phần thưởng không được để trống.', 'error');
+            hideLoading();
+            return;
+        }
+    }
+
+
     const newReward = {
         name,
         type,
-        value: type === 'thankyou' || type === 'freespin' ? null : value, // No value for 'thankyou' or 'freespin'
+        value: type === 'thankyou' ? null : value, // Only freespin and other types have value
         image: type === 'item' ? image : null, // Only image for 'item'
         chance
     };
@@ -967,10 +972,6 @@ async function saveShopDataForRewards() {
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Re-initialize firebase app if not already done by script.js
-    // This assumes `initializeApp`, `getAuth`, `getFirestore` are defined in the global scope
-    // or loaded via modules as here.
-
     // Auth listener for script2.js to know user status
     onAuthStateChanged(auth, async (user) => {
         if (user) {
@@ -981,10 +982,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const userDocSnap = await getDoc(userProfileDocRef);
                 if (userDocSnap.exists()) {
                     loggedInUser = { id: currentUserId, ...userDocSnap.data() };
-                    // We need shopDataCache.adminEmail, which should be loaded by script.js
-                    // For now, assume it's available or fetch it if crucial.
-                    // Or make shopDataCache a global in script.js to be shared.
-                    // For now, let's fetch shopDataCache.adminEmail for isAdmin check.
                     const shopDocSnap = await getDoc(doc(collection(db, `artifacts/${appId}/public/data/shopSettings`), 'shopData'));
                     if (shopDocSnap.exists()) {
                         const shopDataFromFirestore = shopDocSnap.data();
@@ -1005,7 +1002,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSpinCountUI(); // Update UI when auth state changes
         updateGiftButtonState(); // Update gift button state
     });
-
 
     // Real-time listener for shopDataCache.rewards and shopDataCache.vouchers (for display)
     const shopDocRef = doc(collection(db, `artifacts/${appId}/public/data/shopSettings`), 'shopData');
