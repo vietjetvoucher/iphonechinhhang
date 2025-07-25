@@ -9,13 +9,13 @@ import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, q
 // Global variables provided by the Canvas environment (assuming they are set up similarly to script.js)
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-    apiKey: "AIzaSyAJmYFnLAhskjszeK5DZve4z0wRXrXl7Sc",
-    authDomain: "iphonechinhhang-47bdd.firebaseapp.com",
-    projectId: "iphonechinhhang-47bdd",
-    storageBucket: "iphonechinhhang-47bdd.firebasestorage.app",
-    messagingSenderId: "308005027963",
-    appId: "1:308005027963:web:35afe47c3ace690e38e2de",
-    measurementId: "G-PQ7450T99T"
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_AUTH_DOMAIN",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_STORAGE_BUCKET",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID",
+    measurementId: "YOUR_MEASUREMENT_ID"
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -88,6 +88,21 @@ function generateId() {
 function formatCurrency(amount) {
     if (typeof amount !== 'number') return amount; // Handle non-numeric for freeship etc.
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+}
+
+// Loading overlay elements (copied from script.js for self-containment)
+const loadingOverlay = document.createElement('div');
+loadingOverlay.id = 'loadingIndicator';
+loadingOverlay.className = 'loading-overlay hidden';
+loadingOverlay.innerHTML = '<div class="loading-spinner"></div>';
+document.body.appendChild(loadingOverlay);
+
+function showLoading() {
+    loadingOverlay.classList.remove('hidden');
+}
+
+function hideLoading() {
+    loadingOverlay.classList.add('hidden');
 }
 
 function showMessage(message, type = 'info') {
@@ -490,7 +505,7 @@ async function handleRewardOutcome(reward) {
                 userCartData.push({
                     productId: product.id,
                     productName: product.name,
-                    productImage: product.image,
+                    productImage: reward.image || product.image, // Use reward image if available, else product image
                     selectedColor: null, // Prize items may not have specific color/storage selected
                     selectedStorage: null,
                     priceAtAddToCart: priceAtAddToCart,
