@@ -17,20 +17,19 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
     appId: "1:308005027963:web:35afe47c3ace690e38e2de",
     measurementId: "G-PQ7450T99T"
 };
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; // Corrected variable name
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
+// Firebase App and Services (Globally accessible via window)
+window.app = initializeApp(firebaseConfig);
+window.db = getFirestore(window.app);
+window.auth = getAuth(window.app);
 
-let loggedInUser = null;
-let currentUserId = null;
-// ADMIN_EMAIL will now be fetched from Firestore
-const DEFAULT_WAREHOUSE_ADDRESS = "194 Đ. Lê Duẩn, Khâm Thiên, Đống Đa, Hà Nội";
-
-let shopDataCache = {
+// Global State Variables (Globally accessible via window)
+window.loggedInUser = null;
+window.currentUserId = null;
+window.shopDataCache = {
     products: [],
-    vouchers: {},
+    vouchers: {}, // Voucher structure will be updated to include expiry
     warrantyPackages: [],
     bankDetails: {},
     advertisement: {},
@@ -38,11 +37,15 @@ let shopDataCache = {
     name: 'Thegioididong.com',
     address: 'Chưa cập nhật',
     backgroundImg: '',
-    adminEmail: 'dimensiongsv@gmail.com' // Default admin email
+    adminEmail: 'dimensiongsv@gmail.com', // Default admin email
+    rewards: [] // Lucky wheel rewards, now managed centrally
 };
-let userOrdersCache = [];
-let userCartCache = [];
+window.userOrdersCache = [];
+window.userCartCache = [];
 
+const DEFAULT_WAREHOUSE_ADDRESS = "194 Đ. Lê Duẩn, Khâm Thiên, Đống Đa, Hà Nội";
+
+// Utility UI Elements & Functions (Globally accessible via window)
 const loadingOverlay = document.createElement('div');
 loadingOverlay.id = 'loadingIndicator';
 loadingOverlay.className = 'loading-overlay hidden';
@@ -51,21 +54,138 @@ document.body.appendChild(loadingOverlay);
 
 const messageDisplay = document.createElement('div');
 messageDisplay.id = 'messageDisplay';
-messageDisplay.className = 'message hidden fixed top-24 right-6 p-4 rounded-lg shadow-lg z-50';
+messageDisplay.className = 'message hidden fixed p-4 rounded-lg shadow-lg z-50 top-1/4 left-1/2 transform -translate-x-1/2 opacity-0 transition-all duration-500 ease-in-out';
 document.body.appendChild(messageDisplay);
 
-function showLoading() { loadingOverlay.classList.remove('hidden'); }
-function hideLoading() { loadingOverlay.classList.add('hidden'); }
-function showMessage(message, type = 'info') {
+const confirmModal = document.createElement('div');
+confirmModal.id = 'confirm-modal';
+confirmModal.className = 'fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center hidden z-50';
+confirmModal.innerHTML = `
+    <div class="bg-white p-6 rounded-lg shadow-xl w-80">
+        <p id="confirm-message" class="mb-4 text-lg font-semibold text-gray-800"></p>
+        <div class="flex justify-end space-x-3">
+            <button id="confirm-cancel-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-full transition-colors duration-200">Hủy</button>
+            <button id="confirm-ok-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full transition-colors duration-200">Xác nhận</button>
+        </div>
+    </div>
+`;
+document.body.appendChild(confirmModal);
+
+const confirmMessageElement = document.getElementById('confirm-message');
+const confirmOkBtn = document.getElementById('confirm-ok-btn');
+const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
+let confirmCallback = null;
+
+window.showLoading = function() { loadingOverlay.classList.remove('hidden'); };
+window.hideLoading = function() { loadingOverlay.classList.add('hidden'); };
+
+window.showMessage = function(message, type = 'info') {
     messageDisplay.textContent = message;
-    messageDisplay.className = `message ${type} fixed top-24 right-6 p-4 rounded-lg shadow-lg z-50`;
+    messageDisplay.className = `message fixed p-4 rounded-lg shadow-lg z-50
+                                top-1/4 left-1/2 transform -translate-x-1/2
+                                opacity-0 transition-all duration-500 ease-in-out`;
+
+    if (type === 'success') {
+        messageDisplay.classList.add('bg-green-500', 'text-white');
+    } else if (type === 'error') {
+        messageDisplay.classList.add('bg-red-500', 'text-white');
+    } else {
+        messageDisplay.classList.add('bg-blue-500', 'text-white');
+    }
+
     messageDisplay.classList.remove('hidden');
     setTimeout(() => {
-        messageDisplay.classList.add('hidden');
-        messageDisplay.textContent = '';
-        messageDisplay.className = 'message hidden fixed top-24 right-6 p-4 rounded-lg shadow-lg z-50';
+        messageDisplay.classList.add('opacity-100');
+    }, 10);
+
+    setTimeout(() => {
+        messageDisplay.classList.remove('opacity-100');
+        setTimeout(() => {
+            messageDisplay.classList.add('hidden');
+            messageDisplay.textContent = '';
+        }, 500);
     }, 3000);
-}
+};
+
+window.showConfirmModal = function(message, onConfirm) {
+    confirmMessageElement.textContent = message;
+    confirmModal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+    confirmCallback = onConfirm;
+};
+
+window.closeConfirmModal = function() {
+    confirmModal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    confirmCallback = null;
+};
+
+confirmOkBtn.addEventListener('click', () => {
+    if (confirmCallback) {
+        confirmCallback(true);
+    }
+    window.closeConfirmModal();
+});
+
+confirmCancelBtn.addEventListener('click', () => {
+    if (confirmCallback) {
+        confirmCallback(false);
+    }
+    window.closeConfirmModal();
+});
+
+window.openModal = function(modalElement) {
+    modalElement.classList.remove('hidden');
+    modalElement.classList.add('active');
+    document.body.classList.add('overflow-hidden');
+};
+
+window.closeModal = function(modalElement) {
+    modalElement.classList.remove('active');
+    const transitionDuration = parseFloat(getComputedStyle(modalElement).transitionDuration) * 1000;
+
+    let transitionEndFired = false;
+    const onTransitionEnd = () => {
+        transitionEndFired = true;
+        modalElement.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+        modalElement.removeEventListener('transitionend', onTransitionEnd);
+    };
+    modalElement.addEventListener('transitionend', onTransitionEnd);
+    setTimeout(() => {
+        if (!transitionEndFired) {
+            modalElement.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+            modalElement.removeEventListener('transitionend', onTransitionEnd);
+        }
+    }, transitionDuration + 100);
+};
+
+window.formatCurrency = function(amount) {
+    if (typeof amount !== 'number') return amount;
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+};
+
+window.generateId = function() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};
+
+window.saveShopData = async function() {
+    window.showLoading();
+    try {
+        await setDoc(doc(collection(window.db, `artifacts/${appId}/public/data/shopSettings`), 'shopData'), window.shopDataCache);
+        window.showMessage('Dữ liệu cửa hàng đã được lưu!', 'success');
+        console.log("Shop data successfully saved to Firestore.");
+    } catch (error) {
+        console.error("Error saving shop data:", error);
+        window.showMessage(`Lỗi lưu dữ liệu cửa hàng: ${error.message}`, 'error');
+    } finally {
+        window.hideLoading();
+    }
+};
 
 const shopNameDisplay = document.getElementById('shop-name-display');
 const shopAddressDisplay = document.getElementById('shop-address-display');
@@ -133,6 +253,7 @@ const voucherCodeInput = document.getElementById('voucher-code');
 const applyVoucherBtn = document.getElementById('apply-voucher-btn');
 const buyNowDetailBtn = document.getElementById('buy-now-detail-btn');
 const addToCartDetailBtn = document.getElementById('add-to-cart-detail-btn');
+const voucherExpiryMessage = document.getElementById('voucher-expiry-message'); // New element
 
 const orderIdDisplay = document.getElementById('order-id-display');
 const orderProductsSummary = document.getElementById('order-products-summary');
@@ -178,7 +299,17 @@ const cancelEditBtn = document.getElementById('cancel-edit-btn');
 const addVoucherForm = document.getElementById('add-voucher-form');
 const newVoucherCodeInput = document.getElementById('new-voucher-code');
 const newVoucherValueInput = document.getElementById('new-voucher-value');
+const newVoucherExpiryInput = document.getElementById('new-voucher-expiry'); // New: Voucher expiry input
 const currentVouchersList = document.getElementById('current-vouchers-list');
+
+// New Admin Voucher elements
+const addAdminVoucherForm = document.getElementById('add-admin-voucher-form');
+const newAdminVoucherCodeInput = document.getElementById('new-admin-voucher-code');
+const newAdminVoucherTypeSelect = document.getElementById('new-admin-voucher-type'); // New element
+const newAdminVoucherValueInput = document.getElementById('new-admin-voucher-value');
+const newAdminVoucherExpiryInput = document.getElementById('new-admin-voucher-expiry');
+const adminVoucherValueContainer = document.getElementById('admin-voucher-value-container'); // New element
+
 
 const addEditWarrantyPackageForm = document.getElementById('add-edit-warranty-package-form');
 const editWarrantyPackageIdInput = document.getElementById('edit-warranty-package-id');
@@ -203,7 +334,6 @@ const uploadQrCodeBtn = document.getElementById('upload-qr-code-btn');
 const shippingUnitNameInput = document.getElementById('shipping-unit-name-input');
 const shippingUnitImageURLInput = document.getElementById('shipping-unit-image-url-input');
 const uploadShippingUnitImageBtn = document.getElementById('upload-shipping-unit-image-btn');
-// New element for admin email input
 const adminEmailInput = document.getElementById('admin-email-input');
 
 const reportStartDateInput = document.getElementById('report-start-date');
@@ -216,9 +346,8 @@ const topSellingProductsList = document.getElementById('top-selling-products-lis
 const qrCodeDisplay = document.getElementById('qr-code-display');
 const bankNameDisplay = document.getElementById('bank-name-display');
 const accountNumberDisplay = document.getElementById('account-number-display');
-const accountHolderDisplay = document.getElementById('account-holder-display'); // Corrected ID here
+const accountHolderDisplay = document.getElementById('account-holder-display');
 const vatBaseAmountDisplay = document.getElementById('vat-base-amount');
-// New elements for VAT breakdown display
 const totalVatOriginalDisplay = document.getElementById('total-vat-original-display');
 const shopSupportVatDisplay = document.getElementById('shop-support-vat-display');
 const paymentModalVATTotal = document.getElementById('payment-modal-vat-total');
@@ -259,7 +388,7 @@ const registerUsernameInput = document.getElementById('register-username');
 const registerPasswordInput = document.getElementById('register-password');
 const registerConfirmPasswordInput = document.getElementById('register-confirm-password');
 const registerFullnameInput = document.getElementById('register-fullname');
-const registerPhoneInput = document.getElementById('register-phone'); // Corrected this line
+const registerPhoneInput = document.getElementById('register-phone');
 const registerProvinceInput = document.getElementById('register-province');
 const registerSubmitBtn = document.getElementById('register-submit-btn');
 const registerErrorMessage = document.getElementById('register-error-message');
@@ -272,13 +401,12 @@ const profileProvinceInput = document.getElementById('profile-province');
 const saveProfileBtn = document.getElementById('save-profile-btn');
 const profileErrorMessage = document.getElementById('profile-error-message');
 
-// Search inputs for order sections
 const searchCreatedOrdersInput = document.getElementById('search-created-orders');
 const clearSearchCreatedOrdersBtn = document.getElementById('clear-search-created-orders');
 const searchShippingOrdersInput = document.getElementById('search-shipping-orders');
 const clearSearchShippingOrdersBtn = document.getElementById('clear-search-shipping-orders');
 const searchDeliveredOrdersInput = document.getElementById('search-delivered-orders');
-const clearSearchDeliveredOrdersBtn = document.getElementById('clear-search-delivered-orders');
+const clearSearchDeliveredOrdersBtn = document.getElementById('clear-search-delivered-experiments');
 
 
 let currentSelectedProduct = null;
@@ -291,7 +419,8 @@ let isBuyNowFlow = false;
 let currentOrderForTracking = null;
 let currentOrderForWarranty = null;
 let selectedWarrantyPackage = null;
-let currentPriceBeforeVoucherAndVAT = 0; // This will now represent the price before any VAT or discounts
+let currentPriceBeforeVoucherAndVAT = 0;
+let voucherCountdownInterval = null;
 
 const shippingZones = {
     'mienBac': { cost: 0, provinces: ['Hà Nội', 'Hải Phòng', 'Quảng Ninh', 'Bắc Ninh', 'Hải Dương', 'Hưng Yên', 'Vĩnh Phúc', 'Thái Nguyên', 'Phú Thọ', 'Bắc Giang', 'Lạng Sơn', 'Cao Bằng', 'Hà Giang', 'Tuyên Quang', 'Lai Châu', 'Điện Biên', 'Sơn La', 'Hòa Bình', 'Yên Bái', 'Lào Cai'] },
@@ -300,47 +429,6 @@ const shippingZones = {
     'default': { cost: 0 }
 };
 
-function formatCurrency(amount) {
-    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-}
-
-function generateId() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
-
-function openModal(modalElement) {
-    modalElement.classList.remove('hidden');
-    modalElement.classList.add('active');
-    document.body.classList.add('overflow-hidden');
-}
-
-function closeModal(modalElement) {
-    modalElement.classList.remove('active');
-    // Add a fallback timeout in case transitionend doesn't fire
-    const transitionDuration = parseFloat(getComputedStyle(modalElement).transitionDuration) * 1000;
-    
-    let transitionEndFired = false;
-    const onTransitionEnd = () => {
-        transitionEndFired = true;
-        modalElement.classList.add('hidden');
-        document.body.classList.remove('overflow-hidden');
-        modalElement.removeEventListener('transitionend', onTransitionEnd);
-    };
-
-    modalElement.addEventListener('transitionend', onTransitionEnd);
-
-    // Fallback: Ensure modal is hidden and overflow is removed after a short delay
-    setTimeout(() => {
-        if (!transitionEndFired) {
-            modalElement.classList.add('hidden');
-            document.body.classList.remove('overflow-hidden');
-            modalElement.removeEventListener('transitionend', onTransitionEnd); // Clean up listener
-        }
-    }, transitionDuration + 100); // Add a small buffer to the transition duration
-}
 
 function showSection(sectionId, clickedButton) {
     allSections.forEach(section => section.classList.add('hidden'));
@@ -352,26 +440,25 @@ function showSection(sectionId, clickedButton) {
 }
 
 async function loadShopData() {
-    showLoading();
+    window.showLoading();
     try {
-        const shopDocRef = doc(collection(db, `artifacts/${appId}/public/data/shopSettings`), 'shopData');
+        const shopDocRef = doc(collection(window.db, `artifacts/${appId}/public/data/shopSettings`), 'shopData');
 
-        // Set up real-time listener for shop data
         onSnapshot(shopDocRef, async (shopDocSnap) => {
             if (shopDocSnap.exists()) {
-                shopDataCache = { ...shopDataCache, ...shopDocSnap.data() };
-                console.log("Shop data loaded from Firestore (real-time):", shopDataCache);
+                // Merge data from Firestore, ensuring existing properties are not lost
+                Object.assign(window.shopDataCache, shopDocSnap.data());
+                console.log("Shop data loaded from Firestore (real-time):", window.shopDataCache);
             } else {
                 console.log("No shop data found in Firestore. Initializing with default data.");
-                // Initialize with default data if document doesn't exist
-                await setDoc(shopDocRef, shopDataCache);
-                console.log("Default shop data saved to Firestore.");
+                await setDoc(shopDocRef, window.shopDataCache);
+                window.showMessage('Đã tạo dữ liệu cửa hàng mặc định.', 'info');
             }
 
             // Check if products array is empty and add a default product if it is
-            if (!shopDataCache.products || shopDataCache.products.length === 0) {
+            if (!window.shopDataCache.products || window.shopDataCache.products.length === 0) {
                 const defaultProduct = {
-                    id: generateId(),
+                    id: window.generateId(),
                     name: 'iPhone 16 Pro Max',
                     basePrice: 30000000,
                     image: 'https://placehold.co/400x300/cccccc/333333?text=iPhone+16+Pro+Max',
@@ -403,80 +490,66 @@ async function loadShopData() {
                         { color: 'Titan Đen', storage: '1TB', quantity: 28, priceImpact: 0, sold: 6 }
                     ]
                 };
-                shopDataCache.products = [defaultProduct];
-                await setDoc(shopDocRef, shopDataCache); // Save the default product to Firestore
-                showMessage('Đã tạo sản phẩm mặc định iPhone 16 Pro Max.', 'info');
+                window.shopDataCache.products = [defaultProduct];
+                await setDoc(shopDocRef, window.shopDataCache);
+                window.showMessage('Đã tạo sản phẩm mặc định iPhone 16 Pro Max.', 'info');
                 console.log("Default iPhone 16 Pro Max product added and saved.");
             }
 
             loadShopSettingsToUI();
             renderProducts();
             renderProductManagementList();
-            renderVouchersList(); // This will be called automatically on data change
+            renderVouchersList();
             renderWarrantyPackagesList();
-            hideLoading(); // Hide loading after initial data load and UI update
+            // Note: `drawWheel()` and `renderRewardsList()` from script2.js will be called
+            // by its own `DOMContentLoaded` or its `onSnapshot` listener to shopData.
+            window.hideLoading();
         }, (error) => {
             console.error("Error loading shop data with onSnapshot:", error);
-            showMessage(`Lỗi tải dữ liệu cửa hàng: ${error.message}`, 'error');
-            hideLoading();
+            window.showMessage(`Lỗi tải dữ liệu cửa hàng: ${error.message}`, 'error');
+            window.hideLoading();
         });
 
     } catch (error) {
         console.error("Error setting up shop data listener:", error);
-        showMessage(`Lỗi thiết lập lắng nghe dữ liệu cửa hàng: ${error.message}`, 'error');
-        hideLoading();
-    }
-}
-
-async function saveShopData() {
-    showLoading();
-    try {
-        // Corrected Firestore path for shopData
-        await setDoc(doc(collection(db, `artifacts/${appId}/public/data/shopSettings`), 'shopData'), shopDataCache);
-        showMessage('Dữ liệu cửa hàng đã được lưu!', 'success');
-        console.log("Shop data successfully saved to Firestore.");
-    } catch (error) {
-        console.error("Error saving shop data:", error);
-        showMessage(`Lỗi lưu dữ liệu cửa hàng: ${error.message}`, 'error');
-    } finally {
-        hideLoading();
+        window.showMessage(`Lỗi thiết lập lắng nghe dữ liệu cửa hàng: ${error.message}`, 'error');
+        window.hideLoading();
     }
 }
 
 async function loadShopSettingsToUI() {
-    shopNameDisplay.innerHTML = `<i class="fas fa-mobile-alt mr-2 text-gray-700"></i><span class="text-gray-900">${shopDataCache.name.replace('.com', '')}</span><span class="text-red-600">.com</span>`;
-    pageTitle.textContent = shopDataCache.name;
-    shopAddressDisplay.textContent = shopDataCache.address;
+    shopNameDisplay.innerHTML = `<i class="fas fa-mobile-alt mr-2 text-gray-700"></i><span class="text-gray-900">${window.shopDataCache.name.replace('.com', '')}</span><span class="text-red-600">.com</span>`;
+    pageTitle.textContent = window.shopDataCache.name;
+    shopAddressDisplay.textContent = window.shopDataCache.address;
 
-    if (shopDataCache.backgroundImg) {
-        bodyElement.style.backgroundImage = `url('${shopDataCache.backgroundImg}')`;
+    if (window.shopDataCache.backgroundImg) {
+        bodyElement.style.backgroundImage = `url('${window.shopDataCache.backgroundImg}')`;
     } else {
         bodyElement.style.backgroundImage = 'none';
         bodyElement.style.backgroundColor = '#fdf8f4';
     }
 
-    shopNameInput.value = shopDataCache.name || '';
-    shopAddressInput.value = shopDataCache.address || '';
-    backgroundImageURLInput.value = shopDataCache.backgroundImg || '';
-    advertisementTextInput.value = shopDataCache.advertisement.text || '';
-    advertisementAnimationSelect.value = shopDataCache.advertisement.animation || 'none';
-    bankNameInput.value = shopDataCache.bankDetails.bankName || '';
-    accountNumberInput.value = shopDataCache.bankDetails.accountNumber || '';
-    accountHolderInput.value = shopDataCache.bankDetails.accountHolder || '';
-    qrCodeImageURLInput.value = shopDataCache.bankDetails.qrCodeImage || '';
-    shippingUnitNameInput.value = shopDataCache.shippingUnit.name || 'GHN Express';
-    shippingUnitImageURLInput.value = shopDataCache.shippingUnit.image || '';
-    // Đảm bảo rằng adminEmailInput tồn tại trước khi truy cập .value
+    shopNameInput.value = window.shopDataCache.name || '';
+    shopAddressInput.value = window.shopDataCache.address || '';
+    backgroundImageURLInput.value = window.shopDataCache.backgroundImg || '';
+    advertisementTextInput.value = window.shopDataCache.advertisement.text || '';
+    advertisementAnimationSelect.value = window.shopDataCache.advertisement.animation || 'none';
+    bankNameInput.value = window.shopDataCache.bankDetails.bankName || '';
+    accountNumberInput.value = window.shopDataCache.bankDetails.accountNumber || '';
+    accountHolderInput.value = window.shopDataCache.bankDetails.accountHolder || '';
+    qrCodeImageURLInput.value = window.shopDataCache.bankDetails.qrCodeImage || '';
+    shippingUnitNameInput.value = window.shopDataCache.shippingUnit.name || 'GHN Express';
+    shippingUnitImageURLInput.value = window.shopDataCache.shippingUnit.image || '';
     if (adminEmailInput) {
-        adminEmailInput.value = shopDataCache.adminEmail || ''; // Load admin email
+        adminEmailInput.value = window.shopDataCache.adminEmail || '';
     }
 
     updateAdvertisementBanner();
 }
 
 function updateAdvertisementBanner() {
-    const adText = shopDataCache.advertisement.text;
-    const adAnimation = shopDataCache.advertisement.animation;
+    const adText = window.shopDataCache.advertisement.text;
+    const adAnimation = window.shopDataCache.advertisement.animation;
     if (adText) {
         advertisementContent.textContent = adText;
         advertisementBannerContainer.classList.remove('hidden');
@@ -494,33 +567,32 @@ function updateAdvertisementBanner() {
 
 shopSettingsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!loggedInUser || !loggedInUser.isAdmin) {
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Chờ admin kiểm duyệt', 'info');
         return;
     }
-    showLoading();
-    shopDataCache.name = shopNameInput.value.trim();
-    shopDataCache.address = shopAddressInput.value.trim();
-    shopDataCache.backgroundImg = backgroundImageURLInput.value.trim();
-    shopDataCache.advertisement.text = advertisementTextInput.value.trim();
-    shopDataCache.advertisement.animation = advertisementAnimationSelect.value;
-    shopDataCache.bankDetails.bankName = bankNameInput.value.trim();
-    shopDataCache.bankDetails.accountNumber = accountNumberInput.value.trim();
-    shopDataCache.bankDetails.accountHolder = accountHolderInput.value.trim();
-    shopDataCache.bankDetails.qrCodeImage = qrCodeImageURLInput ? qrCodeImageURLInput.value.trim() : '';
-    shopDataCache.shippingUnit.name = shippingUnitNameInput ? shippingUnitNameInput.value.trim() : '';
-    shopDataCache.shippingUnit.image = shippingUnitImageURLInput ? shippingUnitImageURLInput.value.trim() : '';
-    // Đảm bảo rằng adminEmailInput tồn tại trước khi truy cập .value
-    shopDataCache.adminEmail = adminEmailInput ? adminEmailInput.value.trim() : ''; // Save admin email
-    await saveShopData();
+    window.showLoading();
+    window.shopDataCache.name = shopNameInput.value.trim();
+    window.shopDataCache.address = shopAddressInput.value.trim();
+    window.shopDataCache.backgroundImg = backgroundImageURLInput.value.trim();
+    window.shopDataCache.advertisement.text = advertisementTextInput.value.trim();
+    window.shopDataCache.advertisement.animation = advertisementAnimationSelect.value;
+    window.shopDataCache.bankDetails.bankName = bankNameInput.value.trim();
+    window.shopDataCache.bankDetails.accountNumber = accountNumberInput.value.trim();
+    window.shopDataCache.bankDetails.accountHolder = accountHolderInput.value.trim();
+    window.shopDataCache.bankDetails.qrCodeImage = qrCodeImageURLInput ? qrCodeImageURLInput.value.trim() : '';
+    window.shopDataCache.shippingUnit.name = shippingUnitNameInput ? shippingUnitNameInput.value.trim() : '';
+    window.shopDataCache.shippingUnit.image = shippingUnitImageURLInput ? shippingUnitImageURLInput.value.trim() : '';
+    window.shopDataCache.adminEmail = adminEmailInput ? adminEmailInput.value.trim() : '';
+    await window.saveShopData();
     loadShopSettingsToUI();
-    hideLoading();
-    closeModal(shopSettingsModal);
+    window.hideLoading();
+    window.closeModal(shopSettingsModal);
 });
 
 document.getElementById('upload-main-image-btn').addEventListener('click', () => {
-    if (!loggedInUser || !loggedInUser.isAdmin) {
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Chờ admin kiểm duyệt', 'info');
         return;
     }
     const imageUrl = prompt('Nhập URL hình ảnh sản phẩm (URL trực tiếp, GitHub Raw, hoặc chuỗi Base64):');
@@ -529,8 +601,8 @@ document.getElementById('upload-main-image-btn').addEventListener('click', () =>
     }
 });
 document.getElementById('upload-background-btn').addEventListener('click', () => {
-    if (!loggedInUser || !loggedInUser.isAdmin) {
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Chờ admin kiểm duyệt', 'info');
         return;
     }
     const imageUrl = prompt('Nhập URL hình ảnh nền (URL trực tiếp, GitHub Raw, hoặc chuỗi Base64):');
@@ -539,8 +611,8 @@ document.getElementById('upload-background-btn').addEventListener('click', () =>
     }
 });
 uploadQrCodeBtn.addEventListener('click', () => {
-    if (!loggedInUser || !loggedInUser.isAdmin) {
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Chờ admin kiểm duyệt', 'info');
         return;
     }
     const imageUrl = prompt('Nhập URL hình ảnh QR Code ngân hàng (URL trực tiếp, GitHub Raw, hoặc chuỗi Base64):');
@@ -549,8 +621,8 @@ uploadQrCodeBtn.addEventListener('click', () => {
     }
 });
 uploadShippingUnitImageBtn.addEventListener('click', () => {
-    if (!loggedInUser || !loggedInUser.isAdmin) {
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Chờ admin kiểm duyệt', 'info');
         return;
     }
     const imageUrl = prompt('Nhập URL hình ảnh đơn vị vận chuyển (URL trực tiếp, GitHub Raw, hoặc chuỗi Base64):');
@@ -559,120 +631,138 @@ uploadShippingUnitImageBtn.addEventListener('click', () => {
     }
 });
 
-closeProductModalBtn.addEventListener('click', () => closeModal(productDetailModal));
-closeOrderModalBtn.addEventListener('click', () => closeModal(orderCreationModal));
-closeEditShippingModalBtn.addEventListener('click', () => closeModal(editShippingOrderModal));
-closeManagementModalBtn.addEventListener('click', () => closeModal(shopManagementModal));
-closeSettingsModalBtn.addEventListener('click', () => closeModal(shopSettingsModal));
-closeAnalyticsModalBtn.addEventListener('click', () => closeModal(shopAnalyticsModal));
-closeCartModalBtn.addEventListener('click', () => closeModal(cartModal));
-closePaymentVATModalBtn.addEventListener('click', () => closeModal(paymentVATModal));
-closeOrderTrackingModalBtn.addEventListener('click', () => closeModal(orderTrackingModal));
-closePaymentWarrantyModalBtn.addEventListener('click', () => closeModal(paymentWarrantyModal));
-closeLoginRegisterModalBtn.addEventListener('click', () => closeModal(loginRegisterModal));
-closeProfileModalBtn.addEventListener('click', () => closeModal(profileModal));
+closeProductModalBtn.addEventListener('click', () => {
+    window.closeModal(productDetailModal);
+    if (voucherCountdownInterval) {
+        clearInterval(voucherCountdownInterval);
+        voucherCountdownInterval = null;
+    }
+});
+closeOrderModalBtn.addEventListener('click', () => window.closeModal(orderCreationModal));
+closeEditShippingModalBtn.addEventListener('click', () => window.closeModal(editShippingOrderModal));
+closeManagementModalBtn.addEventListener('click', () => window.closeModal(shopManagementModal));
+closeSettingsModalBtn.addEventListener('click', () => window.closeModal(shopSettingsModal));
+closeAnalyticsModalBtn.addEventListener('click', () => window.closeModal(shopAnalyticsModal));
+closeCartModalBtn.addEventListener('click', () => window.closeModal(cartModal));
+closePaymentVATModalBtn.addEventListener('click', () => window.closeModal(paymentVATModal));
+closeOrderTrackingModalBtn.addEventListener('click', () => window.closeModal(orderTrackingModal));
+closePaymentWarrantyModalBtn.addEventListener('click', () => window.closeModal(paymentWarrantyModal));
+closeLoginRegisterModalBtn.addEventListener('click', () => window.closeModal(loginRegisterModal));
+closeProfileModalBtn.addEventListener('click', () => window.closeModal(profileModal));
 
-productDetailModal.addEventListener('click', (e) => { if (e.target === productDetailModal) closeModal(productDetailModal); });
-orderCreationModal.addEventListener('click', (e) => { if (e.target === orderCreationModal) closeModal(orderCreationModal); });
-editShippingOrderModal.addEventListener('click', (e) => { if (e.target === editShippingOrderModal) closeModal(editShippingOrderModal); });
-shopManagementModal.addEventListener('click', (e) => { if (e.target === shopManagementModal) closeModal(shopManagementModal); });
-shopSettingsModal.addEventListener('click', (e) => { if (e.target === shopSettingsModal) closeModal(shopSettingsModal); });
-shopAnalyticsModal.addEventListener('click', (e) => { if (e.target === shopAnalyticsModal) closeModal(shopAnalyticsModal); });
-cartModal.addEventListener('click', (e) => { if (e.target === cartModal) closeModal(cartModal); });
-paymentVATModal.addEventListener('click', (e) => { if (e.target === paymentVATModal) closeModal(paymentVATModal); });
-orderTrackingModal.addEventListener('click', (e) => { if (e.target === orderTrackingModal) closeModal(orderTrackingModal); });
-paymentWarrantyModal.addEventListener('click', (e) => { if (e.target === paymentWarrantyModal) closeModal(paymentWarrantyModal); });
-loginRegisterModal.addEventListener('click', (e) => { if (e.target === loginRegisterModal) closeModal(loginRegisterModal); });
-profileModal.addEventListener('click', (e) => { if (e.target === profileModal) closeModal(profileModal); });
+productDetailModal.addEventListener('click', (e) => {
+    if (e.target === productDetailModal) {
+        window.closeModal(productDetailModal);
+        if (voucherCountdownInterval) {
+            clearInterval(voucherCountdownInterval);
+            voucherCountdownInterval = null;
+        }
+    }
+});
+orderCreationModal.addEventListener('click', (e) => { if (e.target === orderCreationModal) window.closeModal(orderCreationModal); });
+editShippingOrderModal.addEventListener('click', (e) => { if (e.target === editShippingOrderModal) window.closeModal(editShippingOrderModal); });
+shopManagementModal.addEventListener('click', (e) => { if (e.target === shopManagementModal) window.closeModal(shopManagementModal); });
+shopSettingsModal.addEventListener('click', (e) => { if (e.target === shopSettingsModal) window.closeModal(shopSettingsModal); });
+shopAnalyticsModal.addEventListener('click', (e) => { if (e.target === shopAnalyticsModal) window.closeModal(shopAnalyticsModal); });
+cartModal.addEventListener('click', (e) => { if (e.target === cartModal) window.closeModal(cartModal); });
+paymentVATModal.addEventListener('click', (e) => { if (e.target === paymentVATModal) window.closeModal(paymentVATModal); });
+orderTrackingModal.addEventListener('click', (e) => { if (e.target === orderTrackingModal) window.closeModal(orderTrackingModal); });
+paymentWarrantyModal.addEventListener('click', (e) => { if (e.target === paymentWarrantyModal) window.closeModal(paymentWarrantyModal); });
+loginRegisterModal.addEventListener('click', (e) => { if (e.target === loginRegisterModal) window.closeModal(loginRegisterModal); });
+profileModal.addEventListener('click', (e) => { if (e.target === profileModal) window.closeModal(profileModal); });
 
+// Adjusted openManagementModalBtn listener to use existing window.openModal
+// and delegate specific rendering to script2.js for rewards.
 openManagementModalBtn.addEventListener('click', () => {
-    if (!loggedInUser) {
-        showMessage('Vui lòng đăng nhập để sử dụng chức năng này.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser) {
+        window.showMessage('Vui lòng đăng nhập để sử dụng chức năng này.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    if (!loggedInUser.isAdmin) {
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser.isAdmin) {
+        window.showMessage('Bạn không có quyền truy cập chức năng này.', 'info');
         return;
     }
-    openModal(shopManagementModal);
+    window.openModal(shopManagementModal);
     renderProductManagementList();
-    // renderVouchersList(); // Removed, handled by onSnapshot
     renderWarrantyPackagesList();
     resetAddEditProductForm();
     resetAddEditWarrantyPackageForm();
+    // No direct call to script2.js functions here, script2.js will listen to modal open event or onSnapshot.
 });
+
+
 openSettingsModalBtn.addEventListener('click', () => {
-    if (!loggedInUser) {
-        showMessage('Vui lòng đăng nhập để sử dụng chức năng này.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser) {
+        window.showMessage('Vui lòng đăng nhập để sử dụng chức năng này.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    if (!loggedInUser.isAdmin) {
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser.isAdmin) {
+        window.showMessage('Bạn không có quyền truy cập chức năng này.', 'info');
         return;
     }
-    openModal(shopSettingsModal);
+    window.openModal(shopSettingsModal);
 });
 openShopAnalyticsModalBtn.addEventListener('click', () => {
-    if (!loggedInUser) {
-        showMessage('Vui lòng đăng nhập để sử dụng chức năng này.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser) {
+        window.showMessage('Vui lòng đăng nhập để sử dụng chức năng này.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    if (!loggedInUser.isAdmin) {
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser.isAdmin) {
+        window.showMessage('Bạn không có quyền truy cập chức năng này.', 'info');
         return;
     }
-    openModal(shopAnalyticsModal);
+    window.openModal(shopAnalyticsModal);
     generateShopReport();
 });
 openCartModalBtn.addEventListener('click', () => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    openModal(cartModal);
+    window.openModal(cartModal);
     renderCart();
 });
 
 showProductsBtn.addEventListener('click', (e) => showSection('product-list-section', e.target));
 showCreatedOrdersBtn.addEventListener('click', (e) => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để xem đơn hàng.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để xem đơn hàng.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
     showSection('created-orders-section', e.target);
     renderOrders('created');
 });
 showShippingOrdersBtn.addEventListener('click', (e) => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để xem đơn hàng.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để xem đơn hàng.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
     showSection('shipping-orders-section', e.target);
     renderOrders('shipping');
 });
 showDeliveredOrdersBtn.addEventListener('click', (e) => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để xem đơn hàng.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để xem đơn hàng.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
     showSection('delivered-orders-section', e.target);
     renderOrders('delivered');
 });
 openProfileModalBtn.addEventListener('click', () => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để xem hồ sơ.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để xem hồ sơ.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
     renderProfileModal();
-    openModal(profileModal);
+    window.openModal(profileModal);
 });
 
 document.querySelectorAll('.toggle-visibility-btn').forEach(button => {
@@ -701,7 +791,7 @@ function renderProductCard(product) {
     card.innerHTML = `
         <img src="${product.image}" onerror="this.onerror=null;this.src='https://placehold.co/300x200/cccccc/333333?text=No+Image';" alt="${product.name}" class="w-full h-48 object-cover rounded-lg mb-4 shadow-md">
         <h3 class="text-xl font-semibold mb-2 text-gray-900">${product.name}</h3>
-        <p class="text-lg text-gray-700">Giá gốc: <span class="font-bold">${formatCurrency(product.basePrice)}</span></p>
+        <p class="text-lg text-gray-700">Giá sản phẩm: <span class="font-bold">${window.formatCurrency(product.basePrice)}</span></p>
         ${starsHtml}
         <button data-product-id="${product.id}" class="view-product-btn mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-full transition-all duration-200 shadow-md">Xem chi tiết</button>
     `;
@@ -712,7 +802,7 @@ function renderProducts(searchTerm = '') {
     const productGrid = document.getElementById('product-grid');
     productGrid.innerHTML = '';
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
-    const filteredProducts = shopDataCache.products.filter(product =>
+    const filteredProducts = window.shopDataCache.products.filter(product =>
         product.name.toLowerCase().includes(lowerCaseSearchTerm) ||
         product.description.toLowerCase().includes(lowerCaseSearchTerm)
     );
@@ -729,12 +819,11 @@ function renderProducts(searchTerm = '') {
     document.querySelectorAll('.view-product-btn').forEach(button => {
         button.addEventListener('click', (e) => {
             const productId = e.target.dataset.productId;
-            const product = shopDataCache.products.find(p => p.id === productId);
+            const product = window.shopDataCache.products.find(p => p.id === productId);
             if (product) {
-                // Check if user is logged in before displaying product detail
-                if (!loggedInUser || !loggedInUser.id) {
-                    showMessage('Vui lòng đăng nhập để xem chi tiết sản phẩm.', 'info');
-                    openModal(loginRegisterModal); // Show login modal
+                if (!window.loggedInUser || !window.loggedInUser.id) {
+                    window.showMessage('Vui lòng đăng nhập để xem chi tiết sản phẩm.', 'info');
+                    window.openModal(loginRegisterModal);
                     return;
                 }
                 displayProductDetail(product);
@@ -750,9 +839,17 @@ function displayProductDetail(product) {
     voucherCodeInput.value = '';
     modalProductName.textContent = product.name;
     modalProductImage.src = product.image;
-    modalProductBasePrice.textContent = formatCurrency(product.basePrice);
+    modalProductBasePrice.textContent = window.formatCurrency(product.basePrice);
     modalProductDescription.textContent = product.description;
     productOptionsContainer.innerHTML = '';
+    voucherExpiryMessage.classList.add('hidden');
+
+    modalProductPriceDisplay.classList.remove('line-through', 'text-gray-500');
+
+    if (voucherCountdownInterval) {
+        clearInterval(voucherCountdownInterval);
+        voucherCountdownInterval = null;
+    }
 
     if (product.colors && product.colors.length > 0) {
         const colorDiv = document.createElement('div');
@@ -795,13 +892,13 @@ function displayProductDetail(product) {
             btn.addEventListener('click', () => selectOption('storage', storage.name, storage.priceImpact, btn));
         });
         storageDiv.appendChild(storageButtonsDiv);
-        productOptionsContainer.appendChild(storageDiv);
+        productOptionsContainer.appendChild(storageButtonsDiv);
         selectOption('storage', product.storages[0].name, product.storages[0].priceImpact, storageButtonsDiv.children[0]);
     } else {
         currentSelectedOptions.storage = null;
     }
     calculateProductPrice();
-    openModal(productDetailModal);
+    window.openModal(productDetailModal);
 }
 
 function selectOption(type, value, priceImpact, button, displayImage = null) {
@@ -818,6 +915,44 @@ function selectOption(type, value, priceImpact, button, displayImage = null) {
         modalProductImage.src = currentSelectedProduct.image;
     }
     calculateProductPrice();
+}
+
+function updateVoucherCountdown() {
+    if (!currentAppliedVoucher || !currentAppliedVoucher.expiry) {
+        voucherExpiryMessage.classList.add('hidden');
+        if (voucherCountdownInterval) {
+            clearInterval(voucherCountdownInterval);
+            voucherCountdownInterval = null;
+        }
+        return;
+    }
+
+    const now = new Date();
+    const expiryTime = new Date(currentAppliedVoucher.expiry);
+    const timeLeft = expiryTime.getTime() - now.getTime();
+
+    if (timeLeft <= 0) {
+        currentAppliedVoucher = null;
+        voucherExpiryMessage.classList.add('hidden');
+        window.showMessage('Mã voucher đã hết hạn.', 'error');
+        if (voucherCountdownInterval) {
+            clearInterval(voucherCountdownInterval);
+            voucherCountdownInterval = null;
+        }
+        calculateProductPrice();
+        return;
+    }
+
+    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+    const formattedTime = [hours, minutes, seconds]
+        .map(unit => unit.toString().padStart(2, '0'))
+        .join(':');
+
+    voucherExpiryMessage.textContent = `(Voucher giá trị ${currentAppliedVoucher.displayValue} sẽ hết hạn sau ${formattedTime})`;
+    voucherExpiryMessage.classList.remove('hidden');
 }
 
 function calculateProductPrice() {
@@ -863,35 +998,62 @@ function calculateProductPrice() {
         modalProductRemaining.classList.remove('out-of-stock');
     }
 
-    currentPriceBeforeVoucherAndVAT = finalPrice; // This is the base price for VAT calculation
+    currentPriceBeforeVoucherAndVAT = finalPrice;
 
-    // VAT is 10% of the product's original price
     let totalVatForProduct = currentPriceBeforeVoucherAndVAT * 0.10;
-    // Customer pays 20% of the total VAT
     let customerVatPortion = totalVatForProduct * 0.20;
 
     let discountedPrice = finalPrice;
 
+    let isVoucherAppliedAndValid = false;
     if (currentAppliedVoucher) {
-        if (currentAppliedVoucher.type === 'percentage') {
-            discountedPrice = finalPrice * (1 - currentAppliedVoucher.value);
-        } else if (currentAppliedVoucher.type === 'fixed') {
-            discountedPrice = finalPrice - currentAppliedVoucher.value;
-        } else if (currentAppliedVoucher.type === 'freeship') {
-            // Freeship logic handled at order creation/payment
+        const now = new Date();
+        const expiryTime = new Date(currentAppliedVoucher.expiry);
+        if (expiryTime > now) {
+            isVoucherAppliedAndValid = true;
+            if (currentAppliedVoucher.type === 'percentage') {
+                discountedPrice = finalPrice * (1 - currentAppliedVoucher.value);
+            } else if (currentAppliedVoucher.type === 'fixed') {
+                discountedPrice = finalPrice - currentAppliedVoucher.value;
+            }
+            if (voucherCountdownInterval) {
+                clearInterval(voucherCountdownInterval);
+            }
+            voucherCountdownInterval = setInterval(updateVoucherCountdown, 1000);
+            updateVoucherCountdown();
+        } else {
+            currentAppliedVoucher = null;
+            window.showMessage('Mã voucher đã hết hạn.', 'error');
+            if (voucherCountdownInterval) {
+                clearInterval(voucherCountdownInterval);
+                voucherCountdownInterval = null;
+            }
+            voucherExpiryMessage.classList.add('hidden');
+        }
+    } else {
+        voucherExpiryMessage.classList.add('hidden');
+        if (voucherCountdownInterval) {
+            clearInterval(voucherCountdownInterval);
+            voucherCountdownInterval = null;
         }
     }
 
-    currentCalculatedPrice = discountedPrice; // This is the price after product options and voucher, before customer's VAT portion
+    currentCalculatedPrice = isVoucherAppliedAndValid ? discountedPrice : finalPrice;
 
-    modalProductPriceDisplay.textContent = formatCurrency(finalPrice); // Display price before customer VAT portion
-    modalProductVATDisplay.textContent = formatCurrency(customerVatPortion); // Display customer's VAT portion (2% of original)
+    modalProductPriceDisplay.textContent = window.formatCurrency(finalPrice);
+    if (isVoucherAppliedAndValid) {
+        modalProductPriceDisplay.classList.add('line-through', 'text-gray-500');
+    } else {
+        modalProductPriceDisplay.classList.remove('line-through', 'text-gray-500');
+    }
+
+    modalProductVATDisplay.textContent = window.formatCurrency(customerVatPortion);
     modalProductSold.textContent = soldQuantity;
     modalProductRemaining.textContent = remainingQuantity;
 
-    if (currentAppliedVoucher) {
+    if (isVoucherAppliedAndValid) {
         modalProductDiscountDisplay.classList.remove('hidden');
-        modalProductDiscountDisplay.textContent = `Giá sau voucher: ${formatCurrency(discountedPrice)}`;
+        modalProductDiscountDisplay.textContent = `Giá sau voucher: ${window.formatCurrency(discountedPrice)}`;
     } else {
         modalProductDiscountDisplay.classList.add('hidden');
     }
@@ -899,87 +1061,104 @@ function calculateProductPrice() {
 
 applyVoucherBtn.addEventListener('click', () => {
     const voucherCode = voucherCodeInput.value.trim().toUpperCase();
-    const voucher = shopDataCache.vouchers[voucherCode];
+    const voucher = window.shopDataCache.vouchers[voucherCode];
 
     if (voucher) {
-        currentAppliedVoucher = {
-            code: voucherCode,
-            type: typeof voucher === 'number' && voucher < 1 ? 'percentage' : (typeof voucher === 'number' ? 'fixed' : 'freeship'),
-            value: voucher
-        };
-        showMessage(`Áp dụng voucher "${voucherCode}" thành công!`, 'success');
+        if (voucher.isAdminVoucher && (!window.loggedInUser || !window.loggedInUser.isAdmin)) {
+            currentAppliedVoucher = null;
+            window.showMessage('Mã voucher này chỉ dành cho quản trị viên.', 'error');
+            calculateProductPrice();
+            return;
+        }
+
+        const now = new Date();
+        const expiryTime = new Date(voucher.expiry);
+
+        if (expiryTime > now) {
+            currentAppliedVoucher = {
+                code: voucherCode,
+                type: voucher.type,
+                value: voucher.value,
+                expiry: voucher.expiry,
+                displayValue: voucher.displayValue
+            };
+            window.showMessage(`Áp dụng voucher thành công!`, 'success');
+        } else {
+            currentAppliedVoucher = null;
+            window.showMessage('Mã voucher đã hết hạn.', 'error');
+        }
     } else {
         currentAppliedVoucher = null;
-        showMessage('Mã voucher không hợp lệ hoặc không tồn tại.', 'error');
+        window.showMessage('Mã voucher không hợp lệ hoặc không tồn tại.', 'error');
     }
     calculateProductPrice();
 });
 
 buyNowDetailBtn.addEventListener('click', () => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để mua hàng.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để mua hàng.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
     productsToOrder = [{
         product: currentSelectedProduct,
         options: currentSelectedOptions,
         quantity: 1,
-        priceAtOrder: currentCalculatedPrice, // Price after options and voucher
-        originalPriceForVAT: currentPriceBeforeVoucherAndVAT, // Price before VAT/discount for VAT calculation
+        priceAtOrder: currentCalculatedPrice,
+        originalPriceForVAT: currentPriceBeforeVoucherAndVAT,
         voucher: currentAppliedVoucher
     }];
     isBuyNowFlow = true;
-    openModal(orderCreationModal);
+    window.openModal(orderCreationModal);
     populateOrderCreationModal();
 });
 
 addToCartDetailBtn.addEventListener('click', async () => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    showLoading();
+    window.showLoading();
     const selectedColor = currentSelectedOptions.color ? currentSelectedOptions.color.value : null;
     const selectedStorage = currentSelectedOptions.storage ? currentSelectedOptions.storage.value : null;
 
-    const existingCartItemIndex = userCartCache.findIndex(item =>
+    const existingCartItemIndex = window.userCartCache.findIndex(item =>
         item.productId === currentSelectedProduct.id &&
         (item.selectedColor ? item.selectedColor.value === selectedColor : !selectedColor) &&
         (item.selectedStorage ? item.selectedStorage.value === selectedStorage : !selectedStorage)
     );
 
     if (existingCartItemIndex > -1) {
-        userCartCache[existingCartItemIndex].quantity += 1;
+        window.userCartCache[existingCartItemIndex].quantity += 1;
     } else {
-        userCartCache.push({
+        window.userCartCache.push({
             productId: currentSelectedProduct.id,
             productName: currentSelectedProduct.name,
             productImage: currentSelectedProduct.image,
             selectedColor: currentSelectedOptions.color,
             selectedStorage: currentSelectedOptions.storage,
-            priceAtAddToCart: currentCalculatedPrice, // Price after options and voucher
-            originalPriceForVAT: currentPriceBeforeVoucherAndVAT, // Price before VAT/discount for VAT calculation
+            priceAtAddToCart: currentCalculatedPrice,
+            originalPriceForVAT: currentPriceBeforeVoucherAndVAT,
             quantity: 1
         });
     }
     await saveUserCart();
     updateCartCount();
-    hideLoading();
-    showMessage('Đã thêm sản phẩm vào giỏ hàng!', 'success');
+    window.hideLoading();
+    window.showMessage('Đã thêm sản phẩm vào giỏ hàng!', 'success');
 });
 
 async function updateCart(itemIndex, newQuantity) {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để cập nhật giỏ hàng.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để cập nhật giỏ hàng.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
     if (newQuantity <= 0) {
-        userCartCache.splice(itemIndex, 1);
+        window.userCartCache.splice(itemIndex, 1);
     } else {
-        userCartCache[itemIndex].quantity = newQuantity;
+        window.userCartCache[itemIndex].quantity = newQuantity;
     }
     await saveUserCart();
     renderCart();
@@ -991,20 +1170,19 @@ async function renderCart(searchTerm = '') {
     let totalAmount = 0;
     const lowerCaseSearchTerm = searchTerm.toLowerCase();
 
-    const filteredCart = userCartCache.filter(item =>
+    const filteredCart = window.userCartCache.filter(item =>
         item.productName.toLowerCase().includes(lowerCaseSearchTerm)
     );
 
     if (filteredCart.length === 0) {
         cartItemsList.innerHTML = '<p class="text-gray-500 italic text-center">Giỏ hàng trống.</p>';
-        cartTotalAmountSpan.textContent = formatCurrency(0);
+        cartTotalAmountSpan.textContent = window.formatCurrency(0);
         return;
     }
 
     filteredCart.forEach((item, index) => {
-        // Calculate VAT for each item based on its originalPriceForVAT
-        const itemTotalVAT = item.originalPriceForVAT * 0.10; // 10% of original price
-        const itemCustomerVATPortion = itemTotalVAT * 0.20; // Customer pays 20% of total VAT
+        const itemTotalVAT = item.originalPriceForVAT * 0.10;
+        const itemCustomerVATPortion = itemTotalVAT * 0.20;
 
         const itemTotal = (item.priceAtAddToCart + itemCustomerVATPortion) * item.quantity;
         totalAmount += itemTotal;
@@ -1019,8 +1197,8 @@ async function renderCart(searchTerm = '') {
                     ${item.selectedColor ? `Màu: ${item.selectedColor.value}` : ''}
                     ${item.selectedStorage ? ` - Dung lượng: ${item.selectedStorage.value}` : ''}
                 </p>
-                <p class="text-md text-gray-700">Giá (chưa VAT): ${formatCurrency(item.priceAtAddToCart)}</p>
-                <p class="text-md text-gray-700">VAT (khách trả): ${formatCurrency(itemCustomerVATPortion)}</p>
+                <p class="text-md text-gray-700">Giá (chưa VAT): ${window.formatCurrency(item.priceAtAddToCart)}</p>
+                <p class="text-md text-gray-700">VAT (khách trả): ${window.formatCurrency(itemCustomerVATPortion)}</p>
             </div>
             <div class="flex items-center space-x-2">
                 <button class="quantity-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-full" data-index="${index}" data-action="decrease">-</button>
@@ -1034,13 +1212,13 @@ async function renderCart(searchTerm = '') {
         cartItemsList.appendChild(cartItemDiv);
     });
 
-    cartTotalAmountSpan.textContent = formatCurrency(totalAmount);
+    cartTotalAmountSpan.textContent = window.formatCurrency(totalAmount);
 
     document.querySelectorAll('.quantity-btn').forEach(button => {
         button.addEventListener('click', (e) => {
             const index = parseInt(e.target.dataset.index);
             const action = e.target.dataset.action;
-            let newQuantity = userCartCache[index].quantity;
+            let newQuantity = window.userCartCache[index].quantity;
             if (action === 'increase') {
                 newQuantity++;
             } else {
@@ -1059,28 +1237,28 @@ async function renderCart(searchTerm = '') {
 }
 
 buyAllCartBtn.addEventListener('click', () => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để mua hàng.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để mua hàng.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    if (userCartCache.length === 0) {
-        showMessage('Giỏ hàng của bạn đang trống.', 'info');
+    if (window.userCartCache.length === 0) {
+        window.showMessage('Giỏ hàng của bạn đang trống.', 'info');
         return;
     }
-    productsToOrder = userCartCache.map(item => ({
-        product: shopDataCache.products.find(p => p.id === item.productId),
+    productsToOrder = window.userCartCache.map(item => ({
+        product: window.shopDataCache.products.find(p => p.id === item.productId),
         options: {
             color: item.selectedColor,
             storage: item.selectedStorage
         },
-        quantity: item.quantity,
-        priceAtOrder: item.priceAtAddToCart, // Price after options and voucher
-        originalPriceForVAT: item.originalPriceForVAT, // Price before VAT/discount for VAT calculation
+        quantity: 1,
+        priceAtOrder: item.priceAtAddToCart,
+        originalPriceForVAT: item.originalPriceForVAT,
         voucher: null
     }));
     isBuyNowFlow = false;
-    openModal(orderCreationModal);
+    window.openModal(orderCreationModal);
     populateOrderCreationModal();
 });
 
@@ -1093,7 +1271,7 @@ clearSearchCartItemsBtn.addEventListener('click', () => {
 });
 
 function populateOrderCreationModal() {
-    orderIdDisplay.textContent = generateId();
+    orderIdDisplay.textContent = window.generateId();
     orderProductsSummary.innerHTML = '';
     let totalOrderPrice = 0;
     let totalVATCustomerPays = 0;
@@ -1103,8 +1281,8 @@ function populateOrderCreationModal() {
         const productSummaryDiv = document.createElement('div');
         productSummaryDiv.className = 'flex items-center space-x-3 mb-2';
 
-        const itemTotalVAT = item.originalPriceForVAT * 0.10; // 10% of original price
-        const itemCustomerVATPortion = itemTotalVAT * 0.20; // Customer pays 20% of total VAT
+        const itemTotalVAT = item.originalPriceForVAT * 0.10;
+        const itemCustomerVATPortion = itemTotalVAT * 0.20;
 
         const itemPriceIncludingCustomerVAT = item.priceAtOrder + itemCustomerVATPortion;
         const itemTotalPrice = itemPriceIncludingCustomerVAT * item.quantity;
@@ -1117,27 +1295,27 @@ function populateOrderCreationModal() {
             <img src="${item.product.image}" onerror="this.onerror=null;this.src='https://placehold.co/50x50/cccccc/333333?text=SP';" class="w-12 h-12 object-cover rounded-md">
             <div class="flex-1">
                 <p class="font-semibold text-gray-800">${item.product.name} ${item.options.color ? `(${item.options.color.value})` : ''} ${item.options.storage ? `(${item.options.storage.value})` : ''}</p>
-                <p class="text-sm text-gray-600">Số lượng: ${item.quantity} x ${formatCurrency(item.priceAtOrder)} (Giá gốc)</p>
-                <p class="text-sm text-gray-600">VAT (khách trả): ${formatCurrency(itemCustomerVATPortion)}</p>
+                <p class="text-sm text-gray-600">Số lượng: ${item.quantity} x ${window.formatCurrency(item.priceAtOrder)} (Giá sản phẩm)</p>
+                <p class="text-sm text-gray-600">VAT (khách trả): ${window.formatCurrency(itemCustomerVATPortion)}</p>
             </div>
-            <span class="font-bold text-gray-900">${formatCurrency(itemTotalPrice)}</span>
+            <span class="font-bold text-gray-900">${window.formatCurrency(itemTotalPrice)}</span>
         `;
         orderProductsSummary.appendChild(productSummaryDiv);
     });
 
     const totalDiv = document.createElement('div');
     totalDiv.className = 'flex justify-between items-center border-t pt-2 mt-2 font-bold text-lg';
-    totalDiv.innerHTML = `<span>Tổng cộng:</span><span>${formatCurrency(totalOrderPrice)}</span>`;
+    totalDiv.innerHTML = `<span>Tổng cộng:</span><span>${window.formatCurrency(totalOrderPrice)}</span>`;
     orderProductsSummary.appendChild(totalDiv);
 
-    customerNameInput.value = loggedInUser.fullname || '';
-    customerPhoneInput.value = loggedInUser.phone || '';
-    customerAddressInput.value = loggedInUser.province || '';
-    orderLocationInput.value = DEFAULT_WAREHOUSE_ADDRESS; // Default warehouse address
+    customerNameInput.value = window.loggedInUser.fullname || '';
+    customerPhoneInput.value = window.loggedInUser.phone || '';
+    customerAddressInput.value = window.loggedInUser.province || '';
+    orderLocationInput.value = DEFAULT_WAREHOUSE_ADDRESS;
 
     const today = new Date();
-    today.setDate(today.getDate() + 3); // Estimated delivery date = current date + 3 days
-    estimatedDeliveryDateInput.value = today.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    today.setDate(today.getDate() + 3);
+    estimatedDeliveryDateInput.value = today.toISOString().split('T')[0];
 
     orderStatusSteps.forEach(step => step.classList.remove('active'));
     document.querySelector('.order-status-step[data-status="created"]').classList.add('active');
@@ -1145,12 +1323,12 @@ function populateOrderCreationModal() {
 
 orderForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để tạo đơn hàng.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để tạo đơn hàng.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    showLoading();
+    window.showLoading();
 
     const orderId = orderIdDisplay.textContent;
     const customerName = customerNameInput.value.trim();
@@ -1159,11 +1337,11 @@ orderForm.addEventListener('submit', async (e) => {
     const orderLocation = orderLocationInput.value.trim();
     const estimatedDeliveryDate = estimatedDeliveryDateInput.value;
 
-    let totalAmount = 0; // Total amount including customer's VAT portion
-    let totalVATOriginal = 0; // Total VAT (10% of original product price)
-    let totalVATCustomerPays = 0; // Total VAT customer needs to pay (20% of totalVATOriginal)
-    let totalShopSupportVAT = 0; // Total VAT shop supports (80% of totalVATOriginal)
-    let totalOriginalProductPrice = 0; // Sum of original prices of all products
+    let totalAmount = 0;
+    let totalVATOriginal = 0;
+    let totalVATCustomerPays = 0;
+    let totalShopSupportVAT = 0;
+    let totalOriginalProductPrice = 0;
 
     const orderItems = productsToOrder.map(item => {
         const product = item.product;
@@ -1173,17 +1351,17 @@ orderForm.addEventListener('submit', async (e) => {
         );
 
         if (selectedVariant && selectedVariant.quantity < item.quantity) {
-            showMessage(`Sản phẩm "${product.name}" (${item.options.color?.value || ''} ${item.options.storage?.value || ''}) không đủ số lượng. Chỉ còn ${selectedVariant.quantity} sản phẩm.`, 'error');
-            hideLoading();
+            window.showMessage(`Sản phẩm "${product.name}" (${item.options.color?.value || ''} ${item.options.storage?.value || ''}) không đủ số lượng. Chỉ còn ${selectedVariant.quantity} sản phẩm.`, 'error');
+            window.hideLoading();
             return null;
         }
 
-        const itemOriginalPrice = item.originalPriceForVAT; // Price before any VAT or discounts
-        const itemPriceAfterVoucher = item.priceAtOrder; // Price after options and voucher
+        const itemOriginalPrice = item.originalPriceForVAT;
+        const itemPriceAfterVoucher = item.priceAtOrder;
 
-        const itemTotalVAT = itemOriginalPrice * 0.10; // 10% of original price
-        const itemCustomerVATPortion = itemTotalVAT * 0.20; // Customer pays 20% of total VAT
-        const itemShopSupportVAT = itemTotalVAT * 0.80; // Shop supports 80% of total VAT
+        const itemTotalVAT = itemOriginalPrice * 0.10;
+        const itemCustomerVATPortion = itemTotalVAT * 0.20;
+        const itemShopSupportVAT = itemTotalVAT * 0.80;
 
         const itemTotal = (itemPriceAfterVoucher + itemCustomerVATPortion) * item.quantity;
 
@@ -1200,23 +1378,23 @@ orderForm.addEventListener('submit', async (e) => {
             selectedColor: item.options.color,
             selectedStorage: item.options.storage,
             quantity: item.quantity,
-            priceAtOrder: itemPriceAfterVoucher, // Price after options and voucher
-            originalPriceForVAT: itemOriginalPrice, // Original price for VAT calculation
-            totalVAT: itemTotalVAT, // Total VAT for this item (10% of original)
-            customerVATPortion: itemCustomerVATPortion, // Customer's VAT portion for this item (20% of total VAT)
-            shopSupportVAT: itemShopSupportVAT, // Shop's VAT support for this item (80% of total VAT)
+            priceAtOrder: itemPriceAfterVoucher,
+            originalPriceForVAT: itemOriginalPrice,
+            totalVAT: itemTotalVAT,
+            customerVATPortion: itemCustomerVATPortion,
+            shopSupportVAT: itemShopSupportVAT,
             voucher: item.voucher ? { ...item.voucher } : null
         };
     }).filter(item => item !== null);
 
     if (orderItems.length !== productsToOrder.length) {
-        hideLoading();
+        window.hideLoading();
         return;
     }
 
     const newOrder = {
         id: orderId,
-        userId: loggedInUser.id, // Store the user ID who created the order
+        userId: window.loggedInUser.id,
         customerName,
         customerPhone,
         customerAddress,
@@ -1225,67 +1403,59 @@ orderForm.addEventListener('submit', async (e) => {
         orderDate: new Date().toISOString(),
         status: 'created',
         items: orderItems,
-        totalAmount: totalAmount, // Total amount including customer's VAT portion
-        totalVATOriginal: totalVATOriginal, // Total VAT (10% of total original product price)
-        totalVATCustomerPays: totalVATCustomerPays, // Total VAT customer needs to pay (20% of totalVATOriginal)
-        totalShopSupportVAT: totalShopSupportVAT, // Total VAT shop supports (80% of totalVATOriginal)
-        totalOriginalProductPrice: totalOriginalProductPrice, // Sum of original prices of all products
+        totalAmount: totalAmount,
+        totalVATOriginal: totalVATOriginal,
+        totalVATCustomerPays: totalVATCustomerPays,
+        totalShopSupportVAT: totalShopSupportVAT,
+        totalOriginalProductPrice: totalOriginalProductPrice,
         vatPaymentStatus: 'pending',
         warrantyPackage: null,
         warrantyPaymentStatus: 'pending'
     };
 
     try {
-        // Save to user's private collection
-        await setDoc(doc(db, `artifacts/${appId}/users/${loggedInUser.id}/orders`, newOrder.id), newOrder);
+        await setDoc(doc(window.db, `artifacts/${appId}/users/${window.loggedInUser.id}/orders`, newOrder.id), newOrder);
         console.log(`Order ${newOrder.id} saved to user's collection.`);
 
-        // Save to admin's public collection
-        await setDoc(doc(collection(db, `artifacts/${appId}/public/data/adminOrders`), newOrder.id), { ...newOrder, customerUserId: loggedInUser.id });
+        await setDoc(doc(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), newOrder.id), { ...newOrder, customerUserId: window.loggedInUser.id });
         console.log(`Order ${newOrder.id} saved to admin collection.`);
 
 
         for (const item of productsToOrder) {
-            const productIndex = shopDataCache.products.findIndex(p => p.id === item.product.id);
+            const productIndex = window.shopDataCache.products.findIndex(p => p.id === item.product.id);
             if (productIndex > -1) {
                 const selectedColor = item.options.color ? item.options.color.value : null;
                 const selectedStorage = item.options.storage ? item.options.storage.value : null;
-                const variantIndex = shopDataCache.products[productIndex].variants.findIndex(v =>
+                const variantIndex = window.shopDataCache.products[productIndex].variants.findIndex(v =>
                     v.color === selectedColor && v.storage === selectedStorage
                 );
                 if (variantIndex > -1) {
-                    shopDataCache.products[productIndex].variants[variantIndex].quantity -= item.quantity;
-                    shopDataCache.products[productIndex].variants[variantIndex].sold = (shopDataCache.products[productIndex].variants[variantIndex].sold || 0) + item.quantity;
+                    window.shopDataCache.products[productIndex].variants[variantIndex].quantity -= item.quantity;
+                    window.shopDataCache.products[productIndex].variants[variantIndex].sold = (window.shopDataCache.products[productIndex].variants[variantIndex].sold || 0) + item.quantity;
                 }
             }
         }
-        await saveShopData(); // Save the updated shopDataCache to Firestore
+        await window.saveShopData();
         console.log("Shop data (product quantities) updated.");
 
         if (!isBuyNowFlow) {
-            userCartCache = [];
+            window.userCartCache = [];
             await saveUserCart();
             updateCartCount();
         }
 
-        hideLoading();
-        showMessage('Đơn hàng đã được tạo thành công!', 'success');
-        closeModal(orderCreationModal);
-        closeModal(productDetailModal); // Close product detail modal after successful order creation
+        window.hideLoading();
+        window.showMessage('Đơn hàng đã được tạo thành công!', 'success');
+        window.closeModal(orderCreationModal);
+        window.closeModal(productDetailModal);
         renderOrders('created');
     } catch (error) {
-        hideLoading();
+        window.hideLoading();
         console.error("Error creating order:", error);
-        showMessage(`Lỗi khi tạo đơn hàng: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi tạo đơn hàng: ${error.message}`, 'error');
     }
 });
 
-/**
- * Debounce function to limit how often a function is called.
- * @param {function} func The function to debounce.
- * @param {number} delay The delay in milliseconds.
- * @returns {function} The debounced function.
- */
 function debounce(func, delay) {
     let timeout;
     return function(...args) {
@@ -1295,7 +1465,6 @@ function debounce(func, delay) {
     };
 }
 
-// Debounced versions of renderOrders for search inputs
 const debouncedRenderCreatedOrders = debounce(() => renderOrders('created'), 1500);
 const debouncedRenderShippingOrders = debounce(() => renderOrders('shipping'), 1500);
 const debouncedRenderDeliveredOrders = debounce(() => renderOrders('delivered'), 1500);
@@ -1304,26 +1473,23 @@ async function renderOrders(status) {
     const orderListElement = document.getElementById(`${status}-orders-list`);
     const searchInput = document.getElementById(`search-${status}-orders`);
     orderListElement.innerHTML = '<p class="text-gray-500 italic text-center">Đang tải đơn hàng...</p>';
-    showLoading();
+    window.showLoading();
 
     try {
         let orders = [];
-        if (loggedInUser && loggedInUser.isAdmin) {
-            // Admin sees all orders from the public adminOrders collection
-            const q = query(collection(db, `artifacts/${appId}/public/data/adminOrders`), where('status', '==', status));
+        if (window.loggedInUser && window.loggedInUser.isAdmin) {
+            const q = query(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), where('status', '==', status));
             const querySnapshot = await getDocs(q);
             orders = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             console.log(`Admin orders for status ${status}:`, orders);
-        } else if (loggedInUser && loggedInUser.id) {
-            // Regular user sees only their own orders
-            const q = query(collection(db, `artifacts/${appId}/users/${loggedInUser.id}/orders`), where('status', '==', status));
+        } else if (window.loggedInUser && window.loggedInUser.id) {
+            const q = query(collection(window.db, `artifacts/${appId}/users/${window.loggedInUser.id}/orders`), where('status', '==', status));
             const querySnapshot = await getDocs(q);
             orders = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log(`User ${loggedInUser.id} orders for status ${status}:`, orders);
+            console.log(`User ${window.loggedInUser.id} orders for status ${status}:`, orders);
         } else {
-            // No user logged in or anonymous user, cannot fetch user-specific orders
             orderListElement.innerHTML = '<p class="text-gray-500 italic text-center">Vui lòng đăng nhập để xem đơn hàng của bạn.</p>';
-            hideLoading();
+            window.hideLoading();
             return;
         }
 
@@ -1339,7 +1505,6 @@ async function renderOrders(status) {
         } else {
             filteredOrders.forEach(order => {
                 const orderCard = document.createElement('div');
-                // Changed bg-white to bg-transparent
                 orderCard.className = 'bg-transparent rounded-xl shadow-lg p-6 mb-4';
                 orderCard.innerHTML = `
                     <div class="flex justify-between items-center mb-4">
@@ -1351,13 +1516,12 @@ async function renderOrders(status) {
                     <p class="text-gray-700 mb-2"><strong>Địa chỉ:</strong> <span class="blurred-content" id="order-address-${order.id}">${order.customerAddress}</span> <button type="button" class="toggle-visibility-btn text-blue-500 hover:underline" data-target-id="order-address-${order.id}"><i class="fas fa-eye"></i></button></p>
                     <p class="text-gray-700 mb-2"><strong>Vị trí hiện tại:</strong> ${order.orderLocation || 'N/A'}</p>
                     <p class="text-gray-700 mb-2"><strong>Ngày dự kiến giao:</strong> ${order.estimatedDeliveryDate || 'N/A'}</p>
-                    <p class="text-gray-700 mb-2"><strong>Tổng tiền:</strong> ${formatCurrency(order.totalAmount)}</p>
-                    <p class="text-gray-700 mb-2"><strong>VAT (Khách trả):</strong> ${formatCurrency(order.totalVATCustomerPays)} (${order.vatPaymentStatus === 'paid' ? 'Đã thanh toán' : (order.vatPaymentStatus === 'pending_admin' ? 'Đang xác nhận thanh toán' : 'Chưa thanh toán')})</p>
-                    <p class="text-gray-700 mb-2"><strong>VAT (Shop hỗ trợ):</strong> ${formatCurrency(order.totalShopSupportVAT)}</p>
-                    <p class="text-gray-700 mb-2"><strong>Gói bảo hành:</strong> ${order.warrantyPackage ? `${order.warrantyPackage.name} (${formatCurrency(order.warrantyPackage.price - (order.warrantyPackage.price * order.warrantyPackage.discount / 100))})` : 'Không có'}</p>
+                    <p class="text-gray-700 mb-2"><strong>Tổng tiền:</strong> ${window.formatCurrency(order.totalAmount)}</p>
+                    <p class="text-gray-700 mb-2"><strong>VAT (Khách trả):</strong> ${window.formatCurrency(order.totalVATCustomerPays)} (${order.vatPaymentStatus === 'paid' ? 'Đã thanh toán' : (order.vatPaymentStatus === 'pending_admin' ? 'Đang xác nhận thanh toán' : 'Chưa thanh toán')})</p>
+                    <p class="text-gray-700 mb-2"><strong>VAT (Shop đã hỗ trợ thanh toán cho khách hàng ):</strong> ${window.formatCurrency(order.totalShopSupportVAT)}</p>
+                    <p class="text-gray-700 mb-2"><strong>Gói bảo hành:</strong> ${order.warrantyPackage ? `${order.warrantyPackage.name} (${window.formatCurrency(order.warrantyPackage.price - (order.warrantyPackage.price * order.warrantyPackage.discount / 100))})` : 'Chưa đăng ký'}</p>
                     <p class="text-gray-700 mb-4"><strong>Trạng thái bảo hành:</strong> ${order.warrantyPackage ? (order.warrantyPaymentStatus === 'paid' ? 'Đã thanh toán' : (order.warrantyPaymentStatus === 'pending_admin' ? 'Đang xác nhận thanh toán' : 'Chờ xác nhận')) : 'Miễn phí đổi trả trong 30 ngày'}</p>
-                    <!-- Updated: Display "Thanh toán khi nhận hàng" with the total order amount for all statuses -->
-                    <p class="text-red-600 font-bold mb-2">Thanh toán khi nhận hàng: ${formatCurrency(order.totalAmount - order.totalVATCustomerPays)}</p>
+                    <p class="text-red-600 font-bold mb-2">Thanh toán khi nhận hàng: ${window.formatCurrency(order.totalAmount - order.totalVATCustomerPays)}</p>
 
                     <div class="order-expandable-content" id="order-items-${order.id}">
                         <h5 class="font-semibold text-gray-800 mb-2">Sản phẩm:</h5>
@@ -1365,16 +1529,16 @@ async function renderOrders(status) {
                             <div class="flex items-center space-x-3 mb-1 text-sm">
                                 <img src="${item.productImage}" onerror="this.onerror=null;this.src='https://placehold.co/40x40/cccccc/333333?text=SP';" class="w-10 h-10 object-cover rounded-md">
                                 <p class="flex-1">${item.productName} ${item.selectedColor ? `(${item.selectedColor.value})` : ''} ${item.selectedStorage ? `(${item.selectedStorage.value})` : ''} x ${item.quantity}</p>
-                                <span class="font-semibold">${formatCurrency((item.priceAtOrder + item.customerVATPortion) * item.quantity)}</span>
+                                <span class="font-semibold">${window.formatCurrency((item.priceAtOrder + item.customerVATPortion) * item.quantity)}</span>
                             </div>
                         `).join('')}
                     </div>
                     <button class="toggle-order-details-btn text-blue-600 hover:underline text-sm mt-2">Xem chi tiết sản phẩm</button>
                     <div class="mt-4 flex flex-wrap gap-2">
-                        ${loggedInUser && loggedInUser.isAdmin ? `
-                            ${status === 'created' ? `<button class="admin-approve-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200" data-order-id="${order.id}" data-customer-user-id="${order.userId}">Phê duyệt (Vận chuyển)</button>` : ''}
+                        ${window.loggedInUser && window.loggedInUser.isAdmin ? `
+                            ${status === 'created' ? `<button class="admin-approve-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200" data-order-id="${order.id}" data-customer-user-id="${order.userId}" data-action-type="approve_created">Phê duyệt (Vận chuyển)</button>` : ''}
                             ${status === 'shipping' ? `
-                                <button class="admin-approve-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200" data-order-id="${order.id}" data-customer-user-id="${order.userId}">Phê duyệt (Đã giao)</button>
+                                <button class="admin-approve-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200" data-order-id="${order.id}" data-customer-user-id="${order.userId}" data-action-type="approve_shipping">Phê duyệt (Đã giao)</button>
                                 <button class="admin-edit-shipping-btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200" data-order-id="${order.id}">Chi tiết vận chuyển</button>
                             ` : ''}
                             <button class="admin-cancel-btn bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200" data-order-id="${order.id}" data-customer-user-id="${order.userId}">Hủy</button>
@@ -1412,9 +1576,7 @@ async function renderOrders(status) {
 
             document.querySelectorAll('.toggle-order-details-btn').forEach(button => {
                 button.addEventListener('click', function() {
-                    // Ensure 'order' is defined in this scope. It's better to get it from the button's parent.
                     const orderId = this.closest('.bg-transparent').querySelector('h4').textContent.replace('Đơn hàng #', '');
-                    // Find the order object from the `orders` array
                     const currentOrder = orders.find(o => o.id === orderId);
                     if (currentOrder) {
                         const content = document.getElementById(`order-items-${currentOrder.id}`);
@@ -1430,13 +1592,12 @@ async function renderOrders(status) {
                 });
             });
 
-            // Admin specific buttons
             document.querySelectorAll('.admin-approve-btn').forEach(button => {
                 button.addEventListener('click', async (e) => {
                     const orderId = e.target.dataset.orderId;
                     const customerUserId = e.target.dataset.customerUserId;
-                    const targetStatus = (status === 'created' ? 'shipping' : (status === 'shipping' ? 'delivered' : status));
-                    await updateOrderStatus(orderId, customerUserId, targetStatus);
+                    const actionType = e.target.dataset.actionType;
+                    await updateOrderStatus(orderId, customerUserId, actionType);
                 });
             });
 
@@ -1444,9 +1605,11 @@ async function renderOrders(status) {
                 button.addEventListener('click', async (e) => {
                     const orderId = e.target.dataset.orderId;
                     const customerUserId = e.target.dataset.customerUserId;
-                    if (confirm('Bạn có chắc chắn muốn hủy đơn hàng này?')) {
-                        await deleteOrder(orderId, customerUserId);
-                    }
+                    window.showConfirmModal('Bạn có chắc chắn muốn hủy đơn hàng này?', async (confirmed) => {
+                        if (confirmed) {
+                            await deleteOrder(orderId, customerUserId);
+                        }
+                    });
                 });
             });
 
@@ -1459,17 +1622,16 @@ async function renderOrders(status) {
                         editShippingOrderHiddenId.value = order.id;
                         editOrderLocationInput.value = order.orderLocation || '';
                         editEstimatedDeliveryDateInput.value = order.estimatedDeliveryDate || '';
-                        openModal(editShippingOrderModal);
+                        window.openModal(editShippingOrderModal);
                     }
                 });
             });
 
-            // User specific buttons (existing logic)
             document.querySelectorAll('.pay-vat-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
-                    if (!loggedInUser || !loggedInUser.id) {
-                        showMessage('Vui lòng đăng nhập để thanh toán VAT.', 'info');
-                        openModal(loginRegisterModal);
+                    if (!window.loggedInUser || !window.loggedInUser.id) {
+                        window.showMessage('Vui lòng đăng nhập để thanh toán VAT.', 'info');
+                        window.openModal(loginRegisterModal);
                         return;
                     }
                     const orderId = e.target.dataset.orderId;
@@ -1483,9 +1645,9 @@ async function renderOrders(status) {
 
             document.querySelectorAll('.add-warranty-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
-                    if (!loggedInUser || !loggedInUser.id) {
-                        showMessage('Vui lòng đăng nhập để mua gói bảo hành.', 'info');
-                        openModal(loginRegisterModal);
+                    if (!window.loggedInUser || !window.loggedInUser.id) {
+                        window.showMessage('Vui lòng đăng nhập để mua gói bảo hành.', 'info');
+                        window.openModal(loginRegisterModal);
                         return;
                     }
                     const orderId = e.target.dataset.orderId;
@@ -1510,124 +1672,132 @@ async function renderOrders(status) {
 
             document.querySelectorAll('.return-exchange-btn').forEach(button => {
                 button.addEventListener('click', () => {
-                    showMessage('Chức năng đổi/trả đang được phát triển.', 'info');
+                    window.showMessage('Chức năng đổi/trả đang được phát triển.', 'info');
                 });
             });
         }
     } catch (error) {
         console.error("Error rendering orders:", error);
-        showMessage(`Lỗi khi tải đơn hàng: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi tải đơn hàng: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 }
-
-// Event listeners for order search inputs using debounced functions
-// Removed duplicated const declarations
-// const debouncedRenderCreatedOrders = debounce(() => renderOrders('created'), 1500);
-// const debouncedRenderShippingOrders = debounce(() => renderOrders('shipping'), 1500);
-// const debouncedRenderDeliveredOrders = debounce(() => renderOrders('delivered'), 1500);
 
 searchCreatedOrdersInput.addEventListener('input', debouncedRenderCreatedOrders);
 clearSearchCreatedOrdersBtn.addEventListener('click', () => {
     searchCreatedOrdersInput.value = '';
-    renderOrders('created'); // Call immediately on clear
+    renderOrders('created');
 });
 
 searchShippingOrdersInput.addEventListener('input', debouncedRenderShippingOrders);
 clearSearchShippingOrdersBtn.addEventListener('click', () => {
     searchShippingOrdersInput.value = '';
-    renderOrders('shipping'); // Call immediately on clear
+    renderOrders('shipping');
 });
 
 searchDeliveredOrdersInput.addEventListener('input', debouncedRenderDeliveredOrders);
 clearSearchDeliveredOrdersBtn.addEventListener('click', () => {
     searchDeliveredOrdersInput.value = '';
-    renderOrders('delivered'); // Call immediately on clear
+    renderOrders('delivered');
 });
 
 
-async function updateOrderStatus(orderId, customerUserId, newStatus) {
-    showLoading();
+async function updateOrderStatus(orderId, customerUserId, actionType) {
+    window.showLoading();
     try {
-        const updates = { status: newStatus };
-        // No longer setting VAT/warranty status to paid here, as they have their own payment flows
-        // If an order is approved to shipping, it means VAT and Warranty (if applicable) are handled
-        // For simplicity, we assume they are either paid or not applicable when admin approves.
+        const adminOrderRef = doc(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), orderId);
+        const adminOrderSnap = await getDoc(adminOrderRef);
+        if (!adminOrderSnap.exists()) {
+            window.showMessage('Không tìm thấy đơn hàng.', 'error');
+            window.hideLoading();
+            return;
+        }
+        const currentOrderData = adminOrderSnap.data();
+        let newStatus = currentOrderData.status;
+        let updates = { status: newStatus };
 
-        // Update user's order
-        const userOrderRef = doc(db, `artifacts/${appId}/users/${customerUserId}/orders`, orderId);
+        if (actionType === 'approve_created' && newStatus === 'created') {
+            newStatus = 'shipping';
+            const today = new Date();
+            today.setDate(today.getDate() + 5);
+            updates.estimatedDeliveryDate = today.toISOString().split('T')[0];
+            updates.status = newStatus;
+        } else if (actionType === 'approve_shipping' && newStatus === 'shipping') {
+            newStatus = 'delivered';
+            updates.status = newStatus;
+        } else {
+            console.warn(`Invalid actionType or status mismatch: actionType=${actionType}, currentStatus=${newStatus}`);
+            window.showMessage('Hành động không hợp lệ cho trạng thái đơn hàng hiện tại.', 'error');
+            window.hideLoading();
+            return;
+        }
+
+        const userOrderRef = doc(window.db, `artifacts/${appId}/users/${customerUserId}/orders`, orderId);
         await updateDoc(userOrderRef, updates);
         console.log(`Order ${orderId} status updated to ${newStatus} in user's collection.`);
 
-        // Update admin's order (if applicable)
-        const adminOrderRef = doc(collection(db, `artifacts/${appId}/public/data/adminOrders`), orderId);
         await updateDoc(adminOrderRef, updates);
         console.log(`Order ${orderId} status updated to ${newStatus} in admin collection.`);
 
-        showMessage(`Đơn hàng #${orderId} đã được chuyển sang trạng thái "${newStatus}".`, 'success');
-        // Re-render all order sections to reflect changes
+        window.showMessage(`Đơn hàng #${orderId} đã được chuyển sang trạng thái "${newStatus}".`, 'success');
         renderOrders('created');
         renderOrders('shipping');
         renderOrders('delivered');
     } catch (error) {
         console.error("Error updating order status:", error);
-        showMessage(`Lỗi cập nhật trạng thái đơn hàng: ${error.message}`, 'error');
+        window.showMessage(`Lỗi cập nhật trạng thái đơn hàng: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 }
 
 async function deleteOrder(orderId, customerUserId) {
-    showLoading();
+    window.showLoading();
     try {
-        // Delete from user's private collection
-        const userOrderRef = doc(db, `artifacts/${appId}/users/${customerUserId}/orders`, orderId);
+        const userOrderRef = doc(window.db, `artifacts/${appId}/users/${customerUserId}/orders`, orderId);
         await deleteDoc(userOrderRef);
         console.log(`Order ${orderId} deleted from user's collection.`);
 
-        // Delete from admin's public collection
-        const adminOrderRef = doc(collection(db, `artifacts/${appId}/public/data/adminOrders`), orderId);
+        const adminOrderRef = doc(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), orderId);
         await deleteDoc(adminOrderRef);
         console.log(`Order ${orderId} deleted from admin collection.`);
 
-        showMessage(`Đơn hàng #${orderId} đã được hủy thành công.`, 'success');
-        // Re-render all order sections to reflect changes
+        window.showMessage(`Đơn hàng #${orderId} đã được hủy thành công.`, 'success');
         renderOrders('created');
         renderOrders('shipping');
         renderOrders('delivered');
     } catch (error) {
         console.error("Error deleting order:", error);
-        showMessage(`Lỗi khi hủy đơn hàng: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi hủy đơn hàng: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 }
 
 editShippingOrderForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!loggedInUser || !loggedInUser.isAdmin) { // Added null check for loggedInUser
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Chờ admin kiểm duyệt', 'info');
         return;
     }
-    showLoading();
+    window.showLoading();
     const orderId = editShippingOrderHiddenId.value;
     const newLocation = editOrderLocationInput.value.trim();
     const newEstimatedDate = editEstimatedDeliveryDateInput.value;
 
     try {
-        // Fetch the order to get the customerUserId
-        const adminOrderRef = doc(collection(db, `artifacts/${appId}/public/data/adminOrders`), orderId);
+        const adminOrderRef = doc(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), orderId);
         const adminOrderSnap = await getDoc(adminOrderRef);
         if (!adminOrderSnap.exists()) {
-            showMessage('Không tìm thấy đơn hàng để cập nhật.', 'error');
-            hideLoading();
+            window.showMessage('Không tìm thấy đơn hàng để cập nhật.', 'error');
+            window.hideLoading();
             return;
         }
         const orderData = adminOrderSnap.data();
-        const customerUserId = orderData.userId; // Get the original user ID
+        const customerUserId = orderData.userId;
 
-        const userOrderRef = doc(db, `artifacts/${appId}/users/${customerUserId}/orders`, orderId);
+        const userOrderRef = doc(window.db, `artifacts/${appId}/users/${customerUserId}/orders`, orderId);
         await updateDoc(userOrderRef, {
             orderLocation: newLocation,
             estimatedDeliveryDate: newEstimatedDate
@@ -1640,25 +1810,24 @@ editShippingOrderForm.addEventListener('submit', async (e) => {
         });
         console.log(`Shipping info for order ${orderId} updated in admin collection.`);
 
-        showMessage('Cập nhật thông tin vận chuyển thành công!', 'success');
-        closeModal(editShippingOrderModal);
+        window.showMessage('Cập nhật thông tin vận chuyển thành công!', 'success');
+        window.closeModal(editShippingOrderModal);
         renderOrders('shipping');
     } catch (error) {
         console.error("Error updating shipping info:", error);
-        showMessage(`Lỗi cập nhật thông tin vận chuyển: ${error.message}`, 'error');
+        window.showMessage(`Lỗi cập nhật thông tin vận chuyển: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 });
 
-// Thêm nút sao chép sản phẩm
 function renderProductManagementList() {
     productManagementList.innerHTML = '';
-    if (shopDataCache.products.length === 0) {
+    if (window.shopDataCache.products.length === 0) {
         productManagementList.innerHTML = '<p class="text-gray-500 italic">Chưa có sản phẩm nào.</p>';
         return;
     }
-    shopDataCache.products.forEach(product => {
+    window.shopDataCache.products.forEach(product => {
         const productDiv = document.createElement('div');
         productDiv.className = 'flex items-center justify-between bg-gray-100 p-3 rounded-lg shadow-sm';
         productDiv.innerHTML = `
@@ -1666,7 +1835,7 @@ function renderProductManagementList() {
                 <img src="${product.image}" onerror="this.onerror=null;this.src='https://placehold.co/60x60/cccccc/333333?text=SP';" class="w-16 h-16 object-cover rounded-md">
                 <div>
                     <p class="font-semibold text-gray-900">${product.name}</p>
-                    <p class="text-sm text-gray-600">${formatCurrency(product.basePrice)}</p>
+                    <p class="text-sm text-gray-600">${window.formatCurrency(product.basePrice)}</p>
                 </div>
             </div>
             <div class="flex space-x-2">
@@ -1680,8 +1849,8 @@ function renderProductManagementList() {
 
     document.querySelectorAll('.copy-product-btn').forEach(button => {
         button.addEventListener('click', (e) => {
-            if (!loggedInUser || !loggedInUser.isAdmin) {
-                showMessage('Chờ admin kiểm duyệt', 'info');
+            if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+                window.showMessage('Chờ admin kiểm duyệt', 'info');
                 return;
             }
             const productId = e.target.dataset.productId;
@@ -1691,8 +1860,8 @@ function renderProductManagementList() {
 
     document.querySelectorAll('.edit-product-btn').forEach(button => {
         button.addEventListener('click', (e) => {
-            if (!loggedInUser || !loggedInUser.isAdmin) {
-                showMessage('Chờ admin kiểm duyệt', 'info');
+            if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+                window.showMessage('Chờ admin kiểm duyệt', 'info');
                 return;
             }
             const productId = e.target.dataset.productId;
@@ -1702,14 +1871,16 @@ function renderProductManagementList() {
 
     document.querySelectorAll('.delete-product-btn').forEach(button => {
         button.addEventListener('click', async (e) => {
-            if (!loggedInUser || !loggedInUser.isAdmin) {
-                showMessage('Chờ admin kiểm duyệt', 'info');
+            if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+                window.showMessage('Chờ admin kiểm duyệt', 'info');
                 return;
             }
             const productId = e.target.dataset.productId;
-            if (confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
-                await deleteProduct(productId);
-            }
+            window.showConfirmModal('Bạn có chắc chắn muốn xóa sản phẩm này?', async (confirmed) => {
+                if (confirmed) {
+                    await deleteProduct(productId);
+                }
+            });
         });
     });
 }
@@ -1729,37 +1900,33 @@ function resetAddEditProductForm() {
     cancelEditBtn.classList.add('hidden');
 }
 
-// Cập nhật hàm sao chép sản phẩm
 function copyProduct(productId) {
-    const product = shopDataCache.products.find(p => p.id === productId);
+    const product = window.shopDataCache.products.find(p => p.id === productId);
     if (!product) {
-        showMessage('Không tìm thấy sản phẩm để sao chép.', 'error');
+        window.showMessage('Không tìm thấy sản phẩm để sao chép.', 'error');
         return;
     }
 
-    // Tạo một bản sao của sản phẩm và gán ID mới
     const copiedProduct = JSON.parse(JSON.stringify(product));
-    copiedProduct.id = generateId();
-    copiedProduct.name = `Bản sao của ${product.name}`; // Đổi tên để dễ nhận biết
+    copiedProduct.id = window.generateId();
+    copiedProduct.name = `Bản sao của ${product.name}`;
 
-    // Reset số lượng đã bán cho bản sao
     copiedProduct.variants.forEach(variant => {
         variant.sold = 0;
     });
 
-    // Thêm bản sao vào danh sách sản phẩm và hiển thị form chỉnh sửa
-    shopDataCache.products.push(copiedProduct);
-    showMessage('Đã sao chép sản phẩm. Vui lòng chỉnh sửa và lưu.', 'success');
-    editProduct(copiedProduct.id); // Mở form chỉnh sửa với sản phẩm đã sao chép
+    window.shopDataCache.products.push(copiedProduct);
+    window.showMessage('Đã sao chép sản phẩm. Vui lòng chỉnh sửa và lưu.', 'success');
+    editProduct(copiedProduct.id);
 }
 
 addEditProductForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!loggedInUser || !loggedInUser.isAdmin) { // Added null check for loggedInUser
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Chờ admin kiểm duyệt', 'info');
         return;
     }
-    showLoading();
+    window.showLoading();
 
     const productId = editProductIdInput.value;
     const name = newProductNameInput.value.trim();
@@ -1788,7 +1955,7 @@ addEditProductForm.addEventListener('submit', async (e) => {
         const color = item.querySelector('select[data-type="color-select"]').value;
         const storage = item.querySelector('select[data-type="storage-select"]').value;
         const quantity = parseInt(item.querySelector('input[placeholder="Số lượng"]').value) || 0;
-        const sold = parseInt(item.querySelector('input[placeholder="Số lượng đã bán"]').value) || 0; // Lấy giá trị số lượng đã bán
+        const sold = parseInt(item.querySelector('input[placeholder="Số lượng đã bán"]').value) || 0;
         const priceImpact = parseFloat(item.querySelector('input[placeholder="Giá tác động"]').value) || 0;
         if (color && storage) variants.push({ color, storage, quantity, priceImpact, sold });
     });
@@ -1805,30 +1972,27 @@ addEditProductForm.addEventListener('submit', async (e) => {
     };
 
     if (productId) {
-        // Find and update the product in shopDataCache.products
-        const index = shopDataCache.products.findIndex(p => p.id === productId);
+        const index = window.shopDataCache.products.findIndex(p => p.id === productId);
         if (index > -1) {
-            shopDataCache.products[index] = { ...shopDataCache.products[index], ...newProduct };
+            window.shopDataCache.products[index] = { ...window.shopDataCache.products[index], ...newProduct };
         }
-        showMessage('Sản phẩm đã được cập nhật!', 'success');
+        window.showMessage('Sản phẩm đã được cập nhật!', 'success');
         console.log(`Product ${productId} updated.`);
     } else {
-        // Add new product to shopDataCache.products
-        newProduct.id = generateId(); // Assign a new ID for new products
-        shopDataCache.products.push(newProduct);
-        showMessage('Sản phẩm đã được thêm!', 'success');
+        newProduct.id = window.generateId();
+        window.shopDataCache.products.push(newProduct);
+        window.showMessage('Sản phẩm đã được thêm!', 'success');
         console.log("New product added:", newProduct);
     }
-    await saveShopData(); // Save the updated shopDataCache to Firestore
+    await window.saveShopData();
     resetAddEditProductForm();
-    hideLoading();
+    window.hideLoading();
 });
 
-// Cập nhật hàm editProduct để hiển thị số lượng đã bán
 async function editProduct(productId) {
-    const product = shopDataCache.products.find(p => p.id === productId);
+    const product = window.shopDataCache.products.find(p => p.id === productId);
     if (!product) {
-        showMessage('Không tìm thấy sản phẩm.', 'error');
+        window.showMessage('Không tìm thấy sản phẩm.', 'error');
         return;
     }
 
@@ -1856,25 +2020,24 @@ async function editProduct(productId) {
 cancelEditBtn.addEventListener('click', resetAddEditProductForm);
 
 async function deleteProduct(productId) {
-    showLoading();
+    window.showLoading();
     try {
-        shopDataCache.products = shopDataCache.products.filter(p => p.id !== productId);
-        await saveShopData(); // Save the updated shopDataCache to Firestore
-        showMessage('Sản phẩm đã được xóa!', 'success');
+        window.shopDataCache.products = window.shopDataCache.products.filter(p => p.id !== productId);
+        await window.saveShopData();
+        window.showMessage('Sản phẩm đã được xóa!', 'success');
         console.log(`Product ${productId} deleted.`);
     } catch (error) {
         console.error("Error deleting product:", error);
-        showMessage(`Lỗi khi xóa sản phẩm: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi xóa sản phẩm: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 }
 
 addColorOptionBtn.addEventListener('click', () => addColorOption('', 0, ''));
 addStorageOptionBtn.addEventListener('click', () => addStorageOption('', 0));
-addVariantBtn.addEventListener('click', () => addVariant('', '', 0, 0, 0)); // Thêm giá trị mặc định cho sold
+addVariantBtn.addEventListener('click', () => addVariant('', '', 0, 0, 0));
 
-// Cập nhật hàm addVariant để thêm ô số lượng đã bán
 function addVariant(color = '', storage = '', quantity = 0, priceImpact = 0, sold = 0) {
     const div = document.createElement('div');
     div.className = 'flex items-center space-x-2 variant-item';
@@ -1929,16 +2092,23 @@ function addStorageOption(name = '', priceImpact = 0) {
 
 async function renderVouchersList() {
     currentVouchersList.innerHTML = '';
-    const vouchers = Object.entries(shopDataCache.vouchers);
+    const vouchers = Object.entries(window.shopDataCache.vouchers);
     if (vouchers.length === 0) {
         currentVouchersList.innerHTML = '<p class="text-gray-500 italic">Chưa có voucher nào.</p>';
         return;
     }
-    vouchers.forEach(([code, value]) => {
+    vouchers.forEach(([code, voucherData]) => {
         const voucherDiv = document.createElement('div');
         voucherDiv.className = 'flex items-center justify-between bg-gray-100 p-3 rounded-lg shadow-sm';
+        const expiryDate = new Date(voucherData.expiry);
+        const now = new Date();
+        const isExpired = expiryDate <= now;
+        const expiryText = isExpired ? 'Đã hết hạn' : `Hết hạn: ${expiryDate.toLocaleString('vi-VN')}`;
+        const expiryColorClass = isExpired ? 'text-red-500' : 'text-green-600';
+        const isAdminVoucherTag = voucherData.isAdminVoucher ? '<span class="ml-2 px-2 py-1 bg-indigo-200 text-indigo-800 rounded-full text-xs font-semibold">Admin</span>' : '';
+
         voucherDiv.innerHTML = `
-            <p class="font-semibold text-gray-900">${code}: ${typeof value === 'number' && value < 1 ? `${value * 100}%` : (typeof value === 'number' ? formatCurrency(value) : value)}</p>
+            <p class="font-semibold text-gray-900">${code}: ${voucherData.displayValue} <span class="${expiryColorClass}">(${expiryText})</span> ${isAdminVoucherTag}</p>
             <button class="delete-voucher-btn bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg transition-all duration-200" data-voucher-code="${code}">Xóa</button>
         `;
         currentVouchersList.appendChild(voucherDiv);
@@ -1946,79 +2116,211 @@ async function renderVouchersList() {
 
     document.querySelectorAll('.delete-voucher-btn').forEach(button => {
         button.addEventListener('click', async (e) => {
-            if (!loggedInUser || !loggedInUser.isAdmin) { // Added null check for loggedInUser
-                showMessage('Chờ admin kiểm duyệt', 'info');
+            if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+                window.showMessage('Chờ admin kiểm duyệt', 'info');
                 return;
             }
             const voucherCode = e.target.dataset.voucherCode;
-            if (confirm('Bạn có chắc chắn muốn xóa voucher này?')) {
-                await deleteVoucher(voucherCode);
-            }
+            window.showConfirmModal('Bạn có chắc chắn muốn xóa voucher này?', async (confirmed) => {
+                if (confirmed) {
+                    await deleteVoucher(voucherCode);
+                }
+            });
         });
     });
 }
 
 addVoucherForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!loggedInUser || !loggedInUser.isAdmin) { // Added null check for loggedInUser
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Chờ admin kiểm duyệt', 'info');
         return;
     }
-    showLoading();
+    window.showLoading();
     const code = newVoucherCodeInput.value.trim().toUpperCase();
-    let value = newVoucherValueInput.value.trim();
+    let valueInput = newVoucherValueInput.value.trim();
+    const expiryInput = newVoucherExpiryInput.value.trim();
 
-    if (value.toLowerCase() === 'freeship') {
-        value = 'freeship';
+    let voucherValue;
+    let voucherType;
+    let displayValue;
+
+    if (valueInput.toLowerCase() === 'freeship') {
+        voucherValue = 'freeship';
+        voucherType = 'freeship';
+        displayValue = 'Miễn phí vận chuyển';
     } else {
-        value = parseFloat(value);
-        if (isNaN(value)) {
-            showMessage('Giá trị voucher không hợp lệ.', 'error');
-            hideLoading();
+        voucherValue = parseFloat(valueInput);
+        if (isNaN(voucherValue)) {
+            window.showMessage('Giá trị voucher không hợp lệ.', 'error');
+            window.hideLoading();
             return;
+        }
+        if (voucherValue < 1) {
+            voucherType = 'percentage';
+            displayValue = `${voucherValue * 100}%`;
+        } else {
+            voucherType = 'fixed';
+            displayValue = window.formatCurrency(voucherValue);
         }
     }
 
-    shopDataCache.vouchers[code] = value;
-    await saveShopData();
-    // renderVouchersList(); // Removed, handled by onSnapshot
+    if (!expiryInput) {
+        window.showMessage('Vui lòng nhập thời gian hết hạn cho voucher.', 'error');
+        window.hideLoading();
+        return;
+    }
+    const expiryDate = new Date(expiryInput);
+    if (isNaN(expiryDate.getTime())) {
+        window.showMessage('Định dạng thời gian hết hạn không hợp lệ. Vui lòng sử dụng định dạng YYYY-MM-DD HH:MM:SS.', 'error');
+        window.hideLoading();
+        return;
+    }
+
+    window.shopDataCache.vouchers[code] = {
+        value: voucherValue,
+        type: voucherType,
+        expiry: expiryDate.toISOString(),
+        displayValue: displayValue,
+        isAdminVoucher: false
+    };
+    await window.saveShopData();
     newVoucherCodeInput.value = '';
     newVoucherValueInput.value = '';
-    hideLoading();
+    newVoucherExpiryInput.value = '';
+    window.hideLoading();
 });
 
+addAdminVoucherForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Bạn không có quyền thêm voucher Admin.', 'info');
+        return;
+    }
+    window.showLoading();
+    const code = newAdminVoucherCodeInput.value.trim().toUpperCase();
+    const type = newAdminVoucherTypeSelect.value;
+    let valueInput = newAdminVoucherValueInput.value.trim();
+    const expiryInput = newAdminVoucherExpiryInput.value.trim();
+
+    let voucherValue;
+    let displayValue;
+
+    if (type === 'freeship') {
+        voucherValue = 'freeship';
+        displayValue = 'Miễn phí vận chuyển';
+    } else if (type === 'spin') {
+        voucherValue = parseInt(valueInput, 10);
+        if (isNaN(voucherValue) || voucherValue <= 0) {
+            window.showMessage('Số lượt quay phải là một số nguyên dương.', 'error');
+            window.hideLoading();
+            return;
+        }
+        displayValue = `${voucherValue} lượt quay`;
+    }
+    else {
+        voucherValue = parseFloat(valueInput);
+        if (isNaN(voucherValue)) {
+            window.showMessage('Giá trị voucher không hợp lệ.', 'error');
+            window.hideLoading();
+            return;
+        }
+        if (voucherValue < 1) {
+            displayValue = `${voucherValue * 100}%`;
+        } else {
+            displayValue = window.formatCurrency(voucherValue);
+        }
+    }
+
+    if (!expiryInput) {
+        window.showMessage('Vui lòng nhập thời gian hết hạn cho voucher.', 'error');
+        window.hideLoading();
+        return;
+    }
+    const expiryDate = new Date(expiryInput);
+    if (isNaN(expiryDate.getTime())) {
+        window.showMessage('Định dạng thời gian hết hạn không hợp lệ. Vui lòng sử dụng định dạng YYYY-MM-DD HH:MM:SS.', 'error');
+        window.hideLoading();
+        return;
+    }
+
+    window.shopDataCache.vouchers[code] = {
+        value: voucherValue,
+        type: type,
+        expiry: expiryDate.toISOString(),
+        displayValue: displayValue,
+        isAdminVoucher: true
+    };
+    await window.saveShopData();
+    newAdminVoucherCodeInput.value = '';
+    newAdminVoucherTypeSelect.value = 'percentage';
+    newAdminVoucherValueInput.value = '';
+    newAdminVoucherExpiryInput.value = '';
+    window.hideLoading();
+    window.showMessage('Voucher Admin đã được thêm!', 'success');
+});
+
+// Admin Voucher Type change listener
+if (newAdminVoucherTypeSelect) {
+    newAdminVoucherTypeSelect.addEventListener('change', () => {
+        if (newAdminVoucherTypeSelect.value === 'freeship') {
+            newAdminVoucherValueInput.value = 'freeship';
+            newAdminVoucherValueInput.placeholder = 'Miễn phí vận chuyển (Tự động)';
+            newAdminVoucherValueInput.type = 'text';
+            newAdminVoucherValueInput.min = '';
+            newAdminVoucherValueInput.readOnly = true; // Make it read-only
+            adminVoucherValueContainer.classList.remove('hidden');
+        } else if (newAdminVoucherTypeSelect.value === 'spin') {
+            newAdminVoucherValueInput.value = '';
+            newAdminVoucherValueInput.placeholder = 'Số lượt quay (ví dụ: 1, 5, 10)';
+            newAdminVoucherValueInput.type = 'number';
+            newAdminVoucherValueInput.min = '1';
+            newAdminVoucherValueInput.readOnly = false; // Make it editable
+            adminVoucherValueContainer.classList.remove('hidden');
+        }
+        else {
+            newAdminVoucherValueInput.value = '';
+            newAdminVoucherValueInput.placeholder = 'Giá Trị Voucher (ví dụ: 0.10 cho 10%, 50000 cho 50.000 VND)';
+            newAdminVoucherValueInput.type = 'number';
+            newAdminVoucherValueInput.min = '0';
+            newAdminVoucherValueInput.readOnly = false;
+            adminVoucherValueContainer.classList.remove('hidden');
+        }
+    });
+    newAdminVoucherTypeSelect.dispatchEvent(new Event('change')); // Set initial state
+}
+
+
 async function deleteVoucher(code) {
-    showLoading();
+    window.showLoading();
     try {
-        delete shopDataCache.vouchers[code];
-        await saveShopData();
-        // renderVouchersList(); // Removed, handled by onSnapshot
+        delete window.shopDataCache.vouchers[code];
+        await window.saveShopData();
         console.log(`Voucher ${code} deleted.`);
     } catch (error) {
         console.error("Error deleting voucher:", error);
-        showMessage(`Lỗi khi xóa voucher: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi xóa voucher: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 }
 
 async function renderWarrantyPackagesList() {
-    warrantyPackagesSelection.innerHTML = ''; // Clear previous selections in the modal
+    warrantyPackagesSelection.innerHTML = '';
     currentWarrantyPackagesList.innerHTML = '';
-    if (shopDataCache.warrantyPackages.length === 0) {
+    if (window.shopDataCache.warrantyPackages.length === 0) {
         currentWarrantyPackagesList.innerHTML = '<p class="text-gray-500 italic">Chưa có gói bảo hành nào được cấu hình.</p>';
         warrantyPackagesSelection.innerHTML = '<p class="text-gray-500 italic">Chưa có gói bảo hành nào để chọn.</p>';
         return;
     }
 
-    // Render for management list
-    shopDataCache.warrantyPackages.forEach(pkg => {
+    window.shopDataCache.warrantyPackages.forEach(pkg => {
         const packageDiv = document.createElement('div');
         packageDiv.className = 'flex items-center justify-between bg-gray-100 p-3 rounded-lg shadow-sm';
         packageDiv.innerHTML = `
             <div>
                 <p class="font-semibold text-gray-900">${pkg.name}</p>
-                <p class="text-sm text-gray-600">Giá: ${formatCurrency(pkg.price)} - Giảm: ${pkg.discount}%</p>
+                <p class="text-sm text-gray-600">Giá: ${window.formatCurrency(pkg.price)} - Giảm: ${pkg.discount}%</p>
             </div>
             <div class="flex space-x-2">
                 <button class="edit-warranty-package-btn bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg transition-all duration-200" data-package-id="${pkg.id}">Sửa</button>
@@ -2028,16 +2330,15 @@ async function renderWarrantyPackagesList() {
         currentWarrantyPackagesList.appendChild(packageDiv);
     });
 
-    // Render for selection in payment warranty modal
-    shopDataCache.warrantyPackages.forEach(pkg => {
+    window.shopDataCache.warrantyPackages.forEach(pkg => {
         const packageCard = document.createElement('div');
         packageCard.className = 'warranty-package-card cursor-pointer';
         packageCard.dataset.packageId = pkg.id;
         packageCard.innerHTML = `
             <h4 class="font-semibold text-lg text-gray-900">${pkg.name}</h4>
-            <p class="text-gray-700">Giá gốc: <span class="font-bold">${formatCurrency(pkg.price)}</span></p>
+            <p class="text-gray-700">Giá sản phẩm: <span class="font-bold">${window.formatCurrency(pkg.price)}</span></p>
             ${pkg.discount > 0 ? `<p class="text-green-600">Giảm giá: ${pkg.discount}%</p>` : ''}
-            <p class="text-xl font-bold text-blue-700">Giá cuối: ${formatCurrency(pkg.price - (pkg.price * pkg.discount / 100))}</p>
+            <p class="text-xl font-bold text-blue-700">Giá cuối: ${window.formatCurrency(pkg.price - (pkg.price * pkg.discount / 100))}</p>
         `;
         warrantyPackagesSelection.appendChild(packageCard);
 
@@ -2048,8 +2349,7 @@ async function renderWarrantyPackagesList() {
             packageCard.classList.add('selected-package');
             selectedWarrantyPackage = pkg;
             const finalPrice = pkg.price - (pkg.price * pkg.discount / 100);
-            warrantyPaymentTotal.textContent = formatCurrency(finalPrice);
-            // Enable payment button if a package is selected
+            warrantyPaymentTotal.textContent = window.formatCurrency(finalPrice);
             confirmWarrantyPaymentBtn.disabled = false;
             confirmWarrantyPaymentBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         });
@@ -2058,8 +2358,8 @@ async function renderWarrantyPackagesList() {
 
     document.querySelectorAll('.edit-warranty-package-btn').forEach(button => {
         button.addEventListener('click', (e) => {
-            if (!loggedInUser || !loggedInUser.isAdmin) { // Added null check for loggedInUser
-                showMessage('Chờ admin kiểm duyệt', 'info');
+            if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+                window.showMessage('Chờ admin kiểm duyệt', 'info');
                 return;
             }
             const packageId = e.target.dataset.packageId;
@@ -2069,14 +2369,16 @@ async function renderWarrantyPackagesList() {
 
     document.querySelectorAll('.delete-warranty-package-btn').forEach(button => {
         button.addEventListener('click', async (e) => {
-            if (!loggedInUser || !loggedInUser.isAdmin) { // Added null check for loggedInUser
-                showMessage('Chờ admin kiểm duyệt', 'info');
+            if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+                window.showMessage('Chờ admin kiểm duyệt', 'info');
                 return;
             }
             const packageId = e.target.dataset.packageId;
-            if (confirm('Bạn có chắc chắn muốn xóa gói bảo hành này?')) {
-                await deleteWarrantyPackage(packageId);
-            }
+            window.showConfirmModal('Bạn có chắc chắn muốn xóa gói bảo hành này?', async (confirmed) => {
+                if (confirmed) {
+                    await deleteWarrantyPackage(packageId);
+                }
+            });
         });
     });
 }
@@ -2092,11 +2394,11 @@ function resetAddEditWarrantyPackageForm() {
 
 addEditWarrantyPackageForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!loggedInUser || !loggedInUser.isAdmin) { // Added null check for loggedInUser
-        showMessage('Chờ admin kiểm duyệt', 'info');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Chờ admin kiểm duyệt', 'info');
         return;
     }
-    showLoading();
+    window.showLoading();
 
     const packageId = editWarrantyPackageIdInput.value;
     const name = newWarrantyPackageNameInput.value.trim();
@@ -2104,34 +2406,34 @@ addEditWarrantyPackageForm.addEventListener('submit', async (e) => {
     const discount = parseFloat(newWarrantyPackageDiscountInput.value);
 
     const newPackage = {
-        id: packageId || generateId(),
+        id: packageId || window.generateId(),
         name,
         price,
         discount
     };
 
     if (packageId) {
-        const index = shopDataCache.warrantyPackages.findIndex(p => p.id === packageId);
+        const index = window.shopDataCache.warrantyPackages.findIndex(p => p.id === packageId);
         if (index > -1) {
-            shopDataCache.warrantyPackages[index] = newPackage;
+            window.shopDataCache.warrantyPackages[index] = newPackage;
         }
-        showMessage('Gói bảo hành đã được cập nhật!', 'success');
+        window.showMessage('Gói bảo hành đã được cập nhật!', 'success');
         console.log(`Warranty package ${packageId} updated.`);
     } else {
-        shopDataCache.warrantyPackages.push(newPackage);
-        showMessage('Gói bảo hành đã được thêm!', 'success');
+        window.shopDataCache.warrantyPackages.push(newPackage);
+        window.showMessage('Gói bảo hành đã được thêm!', 'success');
         console.log("New warranty package added:", newPackage);
     }
-    await saveShopData();
+    await window.saveShopData();
     renderWarrantyPackagesList();
     resetAddEditWarrantyPackageForm();
-    hideLoading();
+    window.hideLoading();
 });
 
 function editWarrantyPackage(packageId) {
-    const pkg = shopDataCache.warrantyPackages.find(p => p.id === packageId);
+    const pkg = window.shopDataCache.warrantyPackages.find(p => p.id === packageId);
     if (!pkg) {
-        showMessage('Không tìm thấy gói bảo hành.', 'error');
+        window.showMessage('Không tìm thấy gói bảo hành.', 'error');
         return;
     }
     editWarrantyPackageIdInput.value = pkg.id;
@@ -2145,40 +2447,38 @@ function editWarrantyPackage(packageId) {
 cancelEditWarrantyPackageBtn.addEventListener('click', resetAddEditWarrantyPackageForm);
 
 async function deleteWarrantyPackage(packageId) {
-    showLoading();
+    window.showLoading();
     try {
-        shopDataCache.warrantyPackages = shopDataCache.warrantyPackages.filter(p => p.id !== packageId);
-        await saveShopData();
+        window.shopDataCache.warrantyPackages = window.shopDataCache.warrantyPackages.filter(p => p.id !== packageId);
+        await window.saveShopData();
         renderWarrantyPackagesList();
         console.log(`Warranty package ${packageId} deleted.`);
     }
     catch (error) {
         console.error("Error deleting warranty package:", error);
-        showMessage(`Lỗi khi xóa gói bảo hành: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi xóa gói bảo hành: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 }
 
 async function generateShopReport() {
-    showLoading();
+    window.showLoading();
     let allOrders = [];
     try {
-        if (loggedInUser && loggedInUser.isAdmin) { // Added null check for loggedInUser
-            // Corrected Firestore path for adminOrders
-            const querySnapshot = await getDocs(collection(db, `artifacts/${appId}/public/data/adminOrders`));
+        if (window.loggedInUser && window.loggedInUser.isAdmin) {
+            const querySnapshot = await getDocs(collection(window.db, `artifacts/${appId}/public/data/adminOrders`));
             allOrders = querySnapshot.docs.map(doc => doc.data());
             console.log("Admin fetched all orders for report:", allOrders);
-        } else if (loggedInUser && loggedInUser.id) { // User is logged in but not admin
-            const querySnapshot = await getDocs(collection(db, `artifacts/${appId}/users/${loggedInUser.id}/orders`));
+        } else if (window.loggedInUser && window.loggedInUser.id) {
+            const querySnapshot = await getDocs(collection(window.db, `artifacts/${appId}/users/${window.loggedInUser.id}/orders`));
             allOrders = querySnapshot.docs.map(doc => doc.data());
-            console.log(`User ${loggedInUser.id} fetched orders for report:`, allOrders);
+            console.log(`User ${window.loggedInUser.id} fetched orders for report:`, allOrders);
         } else {
-            // No user logged in or anonymous user, cannot fetch user-specific orders for report
-            totalRevenueDisplay.textContent = formatCurrency(0);
+            totalRevenueDisplay.textContent = window.formatCurrency(0);
             totalOrdersDisplay.textContent = 0;
             topSellingProductsList.innerHTML = '<li class="italic text-gray-500">Vui lòng đăng nhập để xem báo cáo.</li>';
-            hideLoading();
+            window.hideLoading();
             return;
         }
 
@@ -2201,7 +2501,7 @@ async function generateShopReport() {
             });
         });
 
-        totalRevenueDisplay.textContent = formatCurrency(totalRevenue);
+        totalRevenueDisplay.textContent = window.formatCurrency(totalRevenue);
         totalOrdersDisplay.textContent = filteredOrders.length;
 
         const sortedProducts = Object.entries(productSales).sort(([, a], [, b]) => b - a);
@@ -2217,184 +2517,155 @@ async function generateShopReport() {
         }
     } catch (error) {
         console.error("Error generating shop report:", error);
-        showMessage(`Lỗi khi tạo báo cáo: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi tạo báo cáo: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 }
 
 generateReportBtn.addEventListener('click', generateShopReport);
 
 function displayPaymentVATModal(order) {
-    // Cập nhật thông tin QR Code và ngân hàng
-    qrCodeDisplay.src = shopDataCache.bankDetails.qrCodeImage || 'https://placehold.co/200x200/cccccc/333333?text=QR+Code';
-    bankNameDisplay.textContent = shopDataCache.bankDetails.bankName || 'N/A';
-    accountNumberDisplay.textContent = shopDataCache.bankDetails.accountNumber || 'N/A';
-    accountHolderDisplay.textContent = shopDataCache.bankDetails.accountHolder || 'N/A';
+    qrCodeDisplay.src = window.shopDataCache.bankDetails.qrCodeImage || 'https://placehold.co/200x200/cccccc/333333?text=QR+Code';
+    bankNameDisplay.textContent = window.shopDataCache.bankDetails.bankName || 'N/A';
+    accountNumberDisplay.textContent = window.shopDataCache.bankDetails.accountNumber || 'N/A';
+    accountHolderDisplay.textContent = window.shopDataCache.bankDetails.accountHolder || 'N/A';
 
-    // Hiển thị các giá trị VAT từ đối tượng đơn hàng
-    vatBaseAmountDisplay.textContent = formatCurrency(order.totalOriginalProductPrice); // Giá đơn hàng (chưa VAT)
+    vatBaseAmountDisplay.textContent = window.formatCurrency(order.totalOriginalProductPrice);
 
-    // Tính toán và hiển thị số tiền shop hỗ trợ (8% của tổng giá gốc sản phẩm)
     const shopSupportAmount = order.totalOriginalProductPrice * 0.08;
     if (shopSupportVatDisplay) {
-        shopSupportVatDisplay.textContent = formatCurrency(shopSupportAmount);
+        shopSupportVatDisplay.textContent = window.formatCurrency(shopSupportAmount);
     }
 
-    // Tính toán và hiển thị tổng tiền VAT (10% của tổng giá gốc sản phẩm)
     const totalVATOriginalAmount = order.totalOriginalProductPrice * 0.10;
     if (totalVatOriginalDisplay) {
-        totalVatOriginalDisplay.textContent = formatCurrency(totalVATOriginalAmount);
+        totalVatOriginalDisplay.textContent = window.formatCurrency(totalVATOriginalAmount);
     }
 
-    // Tính toán và hiển thị số tiền VAT khách hàng cần thanh toán (2% của tổng giá gốc sản phẩm)
     const customerPaysAmount = order.totalOriginalProductPrice * 0.02;
-    paymentModalVATTotal.textContent = formatCurrency(customerPaysAmount);
+    paymentModalVATTotal.textContent = window.formatCurrency(customerPaysAmount);
 
-    // Đặt giá trị mặc định cho ô nhập số tiền khách hàng cần thanh toán
     paymentAmountInput.value = customerPaysAmount;
-    amountPaidDisplay.textContent = formatCurrency(0);
-    remainingPaymentDisplay.textContent = formatCurrency(customerPaysAmount);
+    amountPaidDisplay.textContent = window.formatCurrency(0);
+    remainingPaymentDisplay.textContent = window.formatCurrency(customerPaysAmount);
 
-    // Vô hiệu hóa ô nhập số tiền khách hàng cần thanh toán ngay lập tức
-    // Khách hàng không được phép thay đổi giá trị này.
     paymentAmountInput.disabled = true;
 
-    // Cập nhật hiển thị số tiền đã trả và còn lại khi người dùng nhập
-    // Lưu ý: oninput listener vẫn được giữ lại nhưng sẽ không có tác dụng
-    // nếu paymentAmountInput.disabled là true. Nó chỉ hoạt động nếu disabled là false.
     paymentAmountInput.oninput = () => {
         const paidAmount = parseFloat(paymentAmountInput.value) || 0;
         const remaining = customerPaysAmount - paidAmount;
-        amountPaidDisplay.textContent = formatCurrency(paidAmount);
-        remainingPaymentDisplay.textContent = formatCurrency(remaining);
+        amountPaidDisplay.textContent = window.formatCurrency(paidAmount);
+        remainingPaymentDisplay.textContent = window.formatCurrency(remaining);
         remainingPaymentDisplay.style.color = remaining <= 0 ? '#28a745' : '#e53e3e';
     };
 
-    // Logic để vô hiệu hóa nút "Thanh Toán" chỉ khi đơn hàng đã chuyển trạng thái VAT
-    // Nút sẽ bị vô hiệu hóa nếu vatPaymentStatus là 'pending_admin' hoặc 'paid'.
-    // Nếu là 'pending' (chờ xác nhận thanh toán ban đầu), nút sẽ hoạt động.
     if (order.vatPaymentStatus === 'pending_admin' || order.vatPaymentStatus === 'paid') {
-        confirmPaymentBtn.disabled = true; // Vô hiệu hóa nút thanh toán
-        confirmPaymentBtn.textContent = 'Đang chờ xác nhận...'; // Thay đổi văn bản nút
-        confirmPaymentBtn.classList.add('opacity-50', 'cursor-not-allowed'); // Thêm hiệu ứng CSS vô hiệu hóa
+        confirmPaymentBtn.disabled = true;
+        confirmPaymentBtn.textContent = 'Đang chờ xác nhận...';
+        confirmPaymentBtn.classList.add('opacity-50', 'cursor-not-allowed');
     } else {
-        confirmPaymentBtn.disabled = false; // Kích hoạt nút thanh toán
-        confirmPaymentBtn.textContent = 'Thanh Toán'; // Đặt lại văn bản nút
-        confirmPaymentBtn.classList.remove('opacity-50', 'cursor-not-allowed'); // Xóa hiệu ứng CSS vô hiệu hóa
+        confirmPaymentBtn.disabled = false;
+        confirmPaymentBtn.textContent = 'Thanh Toán';
+        confirmPaymentBtn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 
-    // Logic hiển thị nút cho Admin hoặc người dùng thông thường
-    if (loggedInUser && loggedInUser.isAdmin) {
-        confirmPaymentBtn.classList.add('hidden'); // Ẩn nút "Thanh Toán" cho Admin
-        adminConfirmVatPaymentBtn.classList.remove('hidden'); // Hiển thị nút "Admin Xác Nhận"
+    if (window.loggedInUser && window.loggedInUser.isAdmin) {
+        confirmPaymentBtn.classList.add('hidden');
+        adminConfirmVatPaymentBtn.classList.remove('hidden');
     } else {
-        confirmPaymentBtn.classList.remove('hidden'); // Hiển thị nút "Thanh Toán" cho người dùng
-        adminConfirmVatPaymentBtn.classList.add('hidden'); // Ẩn nút "Admin Xác Nhận"
+        confirmPaymentBtn.classList.remove('hidden');
+        adminConfirmVatPaymentBtn.classList.add('hidden');
     }
 
-    openModal(paymentVATModal); // Mở modal thanh toán VAT
+    window.openModal(paymentVATModal);
 }
 
-// Xử lý sự kiện khi người dùng nhấn nút "Thanh Toán"
 confirmPaymentBtn.addEventListener('click', async () => {
-    // Kiểm tra trạng thái đăng nhập của người dùng
-    if (!loggedInUser || !loggedInUser.id) {
-        showMessage('Vui lòng đăng nhập để thanh toán.', 'info');
-        openModal(loginRegisterModal);
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để thanh toán.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    // Ngăn Admin sử dụng nút này (chỉ dành cho người dùng thông thường)
-    if (loggedInUser && loggedInUser.isAdmin) {
-        showMessage('Admin không cần thực hiện thanh toán này, vui lòng dùng nút "Admin Xác Nhận".', 'info');
+    if (window.loggedInUser && window.loggedInUser.isAdmin) {
+        window.showMessage('Admin không cần thực hiện thanh toán này, vui lòng dùng nút "Admin Xác Nhận".', 'info');
         return;
     }
-    showLoading(); // Hiển thị hiệu ứng tải
+    window.showLoading();
     try {
         const orderId = currentOrderForPayment.id;
-        // Cập nhật trạng thái thanh toán VAT của đơn hàng trong bộ sưu tập của người dùng
-        const orderRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/orders`, orderId);
+        const orderRef = doc(window.db, `artifacts/${appId}/users/${window.loggedInUser.id}/orders`, orderId);
         await updateDoc(orderRef, { vatPaymentStatus: 'pending_admin' });
         console.log(`VAT payment for order ${orderId} set to pending_admin for user.`);
 
-        // Cập nhật trạng thái thanh toán VAT của đơn hàng trong bộ sưu tập công khai của Admin (nếu tồn tại)
-        const adminOrderRef = doc(collection(db, `artifacts/${appId}/public/data/adminOrders`), orderId);
+        const adminOrderRef = doc(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), orderId);
         const adminOrderSnap = await getDoc(adminOrderRef);
         if (adminOrderSnap.exists()) {
             await updateDoc(adminOrderRef, { vatPaymentStatus: 'pending_admin' });
             console.log(`VAT payment for order ${orderId} set to pending_admin for admin.`);
         }
 
-        showMessage('Yêu cầu thanh toán VAT của bạn đang chờ admin xác nhận!', 'info');
-        closeModal(paymentVATModal); // Đóng modal
-        renderOrders(currentOrderForPayment.status); // Cập nhật lại danh sách đơn hàng
+        window.showMessage('Yêu cầu thanh toán VAT của bạn đang chờ admin xác nhận!', 'info');
+        window.closeModal(paymentVATModal);
+        renderOrders(currentOrderForPayment.status);
     } catch (error) {
         console.error("Error confirming VAT payment:", error);
-        showMessage(`Lỗi khi xác nhận thanh toán VAT: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi xác nhận thanh toán VAT: ${error.message}`, 'error');
     } finally {
-        hideLoading(); // Ẩn hiệu ứng tải
+        window.hideLoading();
     }
 });
 
-// Xử lý sự kiện khi Admin nhấn nút "Admin Xác Nhận"
 adminConfirmVatPaymentBtn.addEventListener('click', async () => {
-    // Kiểm tra quyền Admin
-    if (!loggedInUser || !loggedInUser.isAdmin) {
-        showMessage('Bạn không có quyền xác nhận thanh toán này.', 'error');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Bạn không có quyền xác nhận thanh toán này.', 'error');
         return;
     }
-    showLoading(); // Hiển thị hiệu ứng tải
+    window.showLoading();
     try {
         const orderId = currentOrderForPayment.id;
-        // Cập nhật trạng thái thanh toán VAT của đơn hàng trong bộ sưu tập của người dùng
-        const orderRef = doc(db, `artifacts/${appId}/users/${currentOrderForPayment.userId}/orders`, orderId);
+        const orderRef = doc(window.db, `artifacts/${appId}/users/${currentOrderForPayment.userId}/orders`, orderId);
         await updateDoc(orderRef, { vatPaymentStatus: 'paid' });
         console.log(`VAT payment for order ${orderId} set to paid for user.`);
 
-        // Cập nhật trạng thái thanh toán VAT của đơn hàng trong bộ sưu tập công khai của Admin
-        const adminOrderRef = doc(collection(db, `artifacts/${appId}/public/data/adminOrders`), orderId);
+        const adminOrderRef = doc(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), orderId);
         await updateDoc(adminOrderRef, { vatPaymentStatus: 'paid' });
         console.log(`VAT payment for order ${orderId} set to paid for admin.`);
 
-        showMessage(`Đã xác nhận thanh toán VAT cho đơn hàng #${orderId}.`, 'success');
-        closeModal(paymentVATModal); // Đóng modal
-        renderOrders(currentOrderForPayment.status); // Cập nhật lại danh sách đơn hàng
+        window.showMessage(`Đã xác nhận thanh toán VAT cho đơn hàng #${orderId}.`, 'success');
+        window.closeModal(paymentVATModal);
+        renderOrders(currentOrderForPayment.status);
     } catch (error) {
         console.error("Error admin confirming VAT payment:", error);
-        showMessage(`Lỗi khi admin xác nhận thanh toán VAT: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi admin xác nhận thanh toán VAT: ${error.message}`, 'error');
     } finally {
-        hideLoading(); // Ẩn hiệu ứng tải
+        window.hideLoading();
     }
 });
 
 function displayPaymentWarrantyModal(order) {
-    // Reset selected warranty package
     selectedWarrantyPackage = null;
-    warrantyPaymentTotal.textContent = formatCurrency(0);
-    confirmWarrantyPaymentBtn.disabled = true; // Disable button until a package is selected
+    warrantyPaymentTotal.textContent = window.formatCurrency(0);
+    confirmWarrantyPaymentBtn.disabled = true;
     confirmWarrantyPaymentBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
-    // Clear previous selections
     document.querySelectorAll('.warranty-package-card').forEach(card => {
         card.classList.remove('selected-package');
     });
 
-    // Display QR Code and bank details
-    qrCodeDisplayWarranty.src = shopDataCache.bankDetails.qrCodeImage || 'https://placehold.co/200x200/cccccc/333333?text=QR+Code';
-    bankNameDisplayWarranty.textContent = shopDataCache.bankDetails.bankName || 'N/A';
-    accountNumberDisplayWarranty.textContent = shopDataCache.bankDetails.accountNumber || 'N/A';
-    accountHolderDisplayWarranty.textContent = shopDataCache.bankDetails.accountHolder || 'N/A';
+    qrCodeDisplayWarranty.src = window.shopDataCache.bankDetails.qrCodeImage || 'https://placehold.co/200x200/cccccc/333333?text=QR+Code';
+    bankNameDisplayWarranty.textContent = window.shopDataCache.bankDetails.bankName || 'N/A';
+    accountNumberDisplayWarranty.textContent = window.shopDataCache.bankDetails.accountNumber || 'N/A';
+    accountHolderDisplayWarranty.textContent = window.shopDataCache.bankDetails.accountHolder || 'N/A';
 
-    // Logic to hide/show buttons based on user role and warranty status
-    if (loggedInUser && loggedInUser.isAdmin) {
-        confirmWarrantyPaymentBtn.classList.add('hidden'); // Hide user button for admin
-        adminConfirmWarrantyBtn.classList.remove('hidden'); // Show admin button
+    if (window.loggedInUser && window.loggedInUser.isAdmin) {
+        confirmWarrantyPaymentBtn.classList.add('hidden');
+        adminConfirmWarrantyBtn.classList.remove('hidden');
     } else {
-        confirmWarrantyPaymentBtn.classList.remove('hidden'); // Show user button for regular user
-        adminConfirmWarrantyBtn.classList.add('hidden'); // Hide admin button
+        confirmWarrantyPaymentBtn.classList.remove('hidden');
+        adminConfirmWarrantyBtn.classList.add('hidden');
     }
 
-    // Disable user's confirm button if warranty is already paid or pending admin confirmation
     if (order.warrantyPaymentStatus === 'paid' || order.warrantyPaymentStatus === 'pending_admin') {
         confirmWarrantyPaymentBtn.disabled = true;
         confirmWarrantyPaymentBtn.textContent = 'Đã mua gói bảo hành';
@@ -2405,96 +2676,93 @@ function displayPaymentWarrantyModal(order) {
         confirmWarrantyPaymentBtn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 
-    // Render warranty packages for selection
-    renderWarrantyPackagesList(); // This function already populates warrantyPackagesSelection
+    renderWarrantyPackagesList();
 
-    openModal(paymentWarrantyModal);
+    window.openModal(paymentWarrantyModal);
 }
 
 confirmWarrantyPaymentBtn.addEventListener('click', async () => {
-    if (!loggedInUser || !loggedInUser.id) {
-        showMessage('Vui lòng đăng nhập để mua gói bảo hành.', 'info');
-        openModal(loginRegisterModal);
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để mua gói bảo hành.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    if (loggedInUser.isAdmin) {
-        showMessage('Admin không cần thực hiện thanh toán này, vui lòng dùng nút "Admin Xác Nhận".', 'info');
+    if (window.loggedInUser.isAdmin) {
+        window.showMessage('Admin không cần thực hiện thanh toán này, vui lòng dùng nút "Admin Xác Nhận".', 'info');
         return;
     }
     if (!selectedWarrantyPackage) {
-        showMessage('Vui lòng chọn một gói bảo hành.', 'error');
+        window.showMessage('Vui lòng chọn một gói bảo hành.', 'error');
         return;
     }
 
-    showLoading();
+    window.showLoading();
     try {
         const orderId = currentOrderForWarranty.id;
-        const orderRefUser = doc(db, `artifacts/${appId}/users/${loggedInUser.id}/orders`, orderId);
-        const orderRefAdmin = doc(collection(db, `artifacts/${appId}/public/data/adminOrders`), orderId);
+        const orderRefUser = doc(window.db, `artifacts/${appId}/users/${window.loggedInUser.id}/orders`, orderId);
+        const orderRefAdmin = doc(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), orderId);
 
-        // Update user's order
         await updateDoc(orderRefUser, {
             warrantyPackage: selectedWarrantyPackage,
             warrantyPaymentStatus: 'pending_admin'
         });
         console.log(`Warranty payment for order ${orderId} set to pending_admin for user.`);
 
-        // Update admin's order
         await updateDoc(orderRefAdmin, {
             warrantyPackage: selectedWarrantyPackage,
             warrantyPaymentStatus: 'pending_admin'
         });
         console.log(`Warranty payment for order ${orderId} set to pending_admin for admin.`);
 
-        showMessage('Yêu cầu mua gói bảo hành của bạn đang chờ admin xác nhận!', 'info');
-        closeModal(paymentWarrantyModal);
+        window.showMessage('Yêu cầu mua gói bảo hành của bạn đang chờ admin xác nhận!', 'info');
+        window.closeModal(paymentWarrantyModal);
         renderOrders(currentOrderForWarranty.status);
-    } catch (error) {
+    }
+    catch (error) {
         console.error("Error confirming warranty payment:", error);
-        showMessage(`Lỗi khi xác nhận mua gói bảo hành: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi xác nhận mua gói bảo hành: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 });
 
 adminConfirmWarrantyBtn.addEventListener('click', async () => {
-    if (!loggedInUser || !loggedInUser.isAdmin) {
-        showMessage('Bạn không có quyền xác nhận thanh toán này.', 'error');
+    if (!window.loggedInUser || !window.loggedInUser.isAdmin) {
+        window.showMessage('Bạn không có quyền xác nhận thanh toán này.', 'error');
         return;
     }
     if (!currentOrderForWarranty) {
-        showMessage('Không có đơn hàng nào được chọn để xác nhận bảo hành.', 'error');
+        window.showMessage('Không có đơn hàng nào được chọn để xác nhận bảo hành.', 'error');
         return;
     }
 
-    showLoading();
+    window.showLoading();
     try {
         const orderId = currentOrderForWarranty.id;
-        const customerUserId = currentOrderForWarranty.userId; // Get the customer's user ID from the order
-        const orderRefUser = doc(db, `artifacts/${appId}/users/${customerUserId}/orders`, orderId);
+        const customerUserId = currentOrderForWarranty.userId;
+        const orderRefUser = doc(window.db, `artifacts/${appId}/users/${customerUserId}/orders`, orderId);
         await updateDoc(orderRefUser, { warrantyPaymentStatus: 'paid' });
         console.log(`Warranty payment for order ${orderId} set to paid for user.`);
 
-        // Update admin's order
-        const adminOrderRef = doc(collection(db, `artifacts/${appId}/public/data/adminOrders`), orderId);
+        const adminOrderRef = doc(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), orderId);
         await updateDoc(adminOrderRef, { warrantyPaymentStatus: 'paid' });
         console.log(`Warranty payment for order ${orderId} set to paid for admin.`);
 
-        showMessage(`Đã xác nhận thanh toán gói bảo hành cho đơn hàng #${orderId}.`, 'success');
-        closeModal(paymentWarrantyModal);
+        window.showMessage(`Đã xác nhận thanh toán gói bảo hành cho đơn hàng #${orderId}.`, 'success');
+        window.closeModal(paymentWarrantyModal);
         renderOrders(currentOrderForWarranty.status);
     } catch (error) {
         console.error("Error admin confirming warranty payment:", error);
-        showMessage(`Lỗi khi admin xác nhận thanh toán gói bảo hành: ${error.message}`, 'error');
+        window.showMessage(`Lỗi khi admin xác nhận thanh toán gói bảo hành: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 });
 
 
 function displayOrderTrackingModal(order) {
-    trackingShippingUnitImage.src = shopDataCache.shippingUnit.image || 'https://placehold.co/200x100/cccccc/333333?text=Shipping+Unit';
-    trackingShippingUnitName.textContent = shopDataCache.shippingUnit.name || 'GHN Express';
+    trackingShippingUnitImage.src = window.shopDataCache.shippingUnit.image || 'https://placehold.co/200x100/cccccc/333333?text=Shipping+Unit';
+    trackingShippingUnitName.textContent = window.shopDataCache.shippingUnit.name || 'GHN Express';
     trackingOrderId.textContent = order.id;
 
     trackingProductDetails.innerHTML = '';
@@ -2518,69 +2786,65 @@ function displayOrderTrackingModal(order) {
         window.open(googleMapsUrl, '_blank');
     };
 
-    openModal(orderTrackingModal);
+    window.openModal(orderTrackingModal);
 }
 
 
 // Authentication and User Management
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(window.auth, async (user) => {
     if (user) {
-        currentUserId = user.uid;
+        window.currentUserId = user.uid;
         console.log("User authenticated:", user.uid);
-        const userProfileDocRef = doc(db, `artifacts/${appId}/users/${currentUserId}`);
+        const userProfileDocRef = doc(window.db, `artifacts/${appId}/users/${window.currentUserId}`);
         try {
             const userDocSnap = await getDoc(userProfileDocRef);
             if (userDocSnap.exists()) {
-                loggedInUser = { id: currentUserId, ...userDocSnap.data() };
-                // Ensure isAdmin is explicitly set based on email, even if not in Firestore doc
-                loggedInUser.isAdmin = (loggedInUser.email === shopDataCache.adminEmail);
-                console.log("Logged in user data:", loggedInUser);
+                window.loggedInUser = { id: window.currentUserId, ...userDocSnap.data() };
+                window.loggedInUser.isAdmin = (window.loggedInUser.email === window.shopDataCache.adminEmail);
+                console.log("Logged in user data:", window.loggedInUser);
             } else {
-                // If user profile doesn't exist, create a basic one
-                const isUserAdmin = (user.email === shopDataCache.adminEmail);
-                loggedInUser = {
-                    id: currentUserId,
-                    username: user.email || `guest_${currentUserId.substring(0, 8)}`,
+                const isUserAdmin = (user.email === window.shopDataCache.adminEmail);
+                window.loggedInUser = {
+                    id: window.currentUserId,
+                    username: user.email || `guest_${window.currentUserId.substring(0, 8)}`,
                     fullname: '',
                     phone: '',
                     province: '',
                     isAdmin: isUserAdmin,
                     email: user.email
                 };
-                await setDoc(userProfileDocRef, loggedInUser); // Save the new profile
-                console.log("New user profile created:", loggedInUser);
+                await setDoc(userProfileDocRef, window.loggedInUser);
+                console.log("New user profile created:", window.loggedInUser);
             }
 
-            // Listen to orders based on user type
-            if (!loggedInUser.isAdmin) {
-                onSnapshot(collection(db, `artifacts/${appId}/users/${currentUserId}/orders`), (snapshot) => {
-                    userOrdersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    console.log("User orders updated:", userOrdersCache);
-                    if (loggedInUser) {
+            if (!window.loggedInUser.isAdmin) {
+                onSnapshot(collection(window.db, `artifacts/${appId}/users/${window.currentUserId}/orders`), (snapshot) => {
+                    window.userOrdersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    console.log("User orders updated:", window.userOrdersCache);
+                    if (window.loggedInUser) {
                         renderOrders('created');
                         renderOrders('shipping');
                         renderOrders('delivered');
                     }
                 }, (error) => console.error("Error fetching user orders:", error));
 
-                onSnapshot(doc(collection(db, `artifacts/${appId}/users/${currentUserId}/cart`), 'currentCart'), (docSnapshot) => {
+                onSnapshot(doc(collection(window.db, `artifacts/${appId}/users/${window.currentUserId}/cart`), 'currentCart'), (docSnapshot) => {
                     if (docSnapshot.exists()) {
-                        userCartCache = docSnapshot.data().items || [];
+                        window.userCartCache = docSnapshot.data().items || [];
                     } else {
-                        userCartCache = [];
+                        window.userCartCache = [];
                     }
-                    console.log("User cart updated:", userCartCache);
+                    console.log("User cart updated:", window.userCartCache);
                     updateCartCount();
                     if (cartModal.classList.contains('active')) {
                         renderCart();
                     }
                 }, (error) => console.error("Error fetching user cart:", error));
             } else {
-                // Admin listens to the public adminOrders collection
-                onSnapshot(collection(db, `artifacts/${appId}/public/data/adminOrders`), (snapshot) => {
-                    userOrdersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    console.log("Admin orders updated:", userOrdersCache);
-                    if (loggedInUser) {
+                onSnapshot(collection(window.db, `artifacts/${appId}/public/data/adminOrders`), (snapshot) => {
+                    window.userOrdersCache = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    console.log("Admin orders updated:", window.userOrdersCache);
+                    if (window.loggedInUser) {
                         renderOrders('created');
                         renderOrders('shipping');
                         renderOrders('delivered');
@@ -2589,39 +2853,46 @@ onAuthStateChanged(auth, async (user) => {
             }
         } catch (error) {
             console.error("Error during user profile fetching/creation:", error);
-            showMessage(`Lỗi tải hồ sơ người dùng: ${error.message}`, 'error');
+            window.showMessage(`Lỗi tải hồ sơ người dùng: ${error.message}`, 'error');
         }
     } else {
-        // If no user is logged in, initialize loggedInUser as an anonymous/guest object
-        loggedInUser = { id: null, username: 'Khách', isAdmin: false, email: null, fullname: '', phone: '', province: '' };
-        currentUserId = null;
-        userOrdersCache = [];
-        userCartCache = [];
+        window.loggedInUser = { id: null, username: 'Khách', isAdmin: false, email: null, fullname: '', phone: '', province: '' };
+        window.currentUserId = null;
+        window.userOrdersCache = [];
+        window.userCartCache = [];
         console.log("User logged out.");
     }
     updateAuthUI();
 });
 
 function updateAuthUI() {
-    // Ensure loggedInUser is not null before accessing its properties
-    if (loggedInUser && loggedInUser.id) { // Check if user is truly logged in (id is not null for authenticated users)
-        loginStatusBtn.textContent = `Xin chào, ${loggedInUser.username || loggedInUser.email || 'Khách'}`;
+    if (window.loggedInUser && window.loggedInUser.id) {
+        loginStatusBtn.textContent = `Xin chào, ${window.loggedInUser.username || window.loggedInUser.email || 'Khách'}`;
         loginStatusBtn.onclick = logoutUser;
-        openManagementModalBtn.style.display = loggedInUser.isAdmin ? 'block' : 'none';
-        openSettingsModalBtn.style.display = loggedInUser.isAdmin ? 'block' : 'none';
-        openShopAnalyticsModalBtn.style.display = loggedInUser.isAdmin ? 'block' : 'none';
+        openManagementModalBtn.style.display = window.loggedInUser.isAdmin ? 'block' : 'none';
+        openSettingsModalBtn.style.display = window.loggedInUser.isAdmin ? 'block' : 'none';
+        openShopAnalyticsModalBtn.style.display = window.loggedInUser.isAdmin ? 'block' : 'none';
+        const adminVoucherSection = document.getElementById('add-admin-voucher-form').closest('.border-b.pb-6.border-gray-200');
+        if (adminVoucherSection) {
+            adminVoucherSection.style.display = window.loggedInUser.isAdmin ? 'block' : 'none';
+        }
+
     } else {
         loginStatusBtn.textContent = 'Đăng nhập';
-        loginStatusBtn.onclick = () => openModal(loginRegisterModal);
+        loginStatusBtn.onclick = () => window.openModal(loginRegisterModal);
         openManagementModalBtn.style.display = 'none';
         openSettingsModalBtn.style.display = 'none';
         openShopAnalyticsModalBtn.style.display = 'none';
+        const adminVoucherSection = document.getElementById('add-admin-voucher-form').closest('.border-b.pb-6.border-gray-200');
+        if (adminVoucherSection) {
+            adminVoucherSection.style.display = 'none';
+        }
     }
 }
 
 loginStatusBtn.addEventListener('click', () => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        openModal(loginRegisterModal);
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.openModal(loginRegisterModal);
     } else {
         logoutUser();
     }
@@ -2664,23 +2935,23 @@ registerSubmitBtn.addEventListener('click', async () => {
         return;
     }
 
-    showLoading();
+    window.showLoading();
     try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(window.auth, email, password);
         const user = userCredential.user;
-        const isUserAdmin = (email === shopDataCache.adminEmail); // Use fetched admin email
+        const isUserAdmin = (email === window.shopDataCache.adminEmail);
 
-        await setDoc(doc(db, `artifacts/${appId}/users/${user.uid}`), {
+        await setDoc(doc(window.db, `artifacts/${appId}/users/${user.uid}`), {
             username: email,
             fullname,
             phone,
             province,
             isAdmin: isUserAdmin,
-            email: email // Store email in user profile
+            email: email
         });
         console.log("User registered and profile created:", user.uid);
 
-        showMessage('Đăng ký thành công! Vui lòng đăng nhập.', 'success');
+        window.showMessage('Đăng ký thành công! Vui lòng đăng nhập.', 'success');
         registerErrorMessage.classList.add('hidden');
         loginForm.classList.remove('hidden');
         registerForm.classList.add('hidden');
@@ -2692,7 +2963,7 @@ registerSubmitBtn.addEventListener('click', async () => {
         registerErrorMessage.textContent = `Lỗi đăng ký: ${error.message}`;
         registerErrorMessage.classList.remove('hidden');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 });
 
@@ -2706,97 +2977,96 @@ loginSubmitBtn.addEventListener('click', async () => {
         return;
     }
 
-    showLoading();
+    window.showLoading();
     try {
-        await signInWithEmailAndPassword(auth, email, password);
-        showMessage('Đăng nhập thành công!', 'success');
+        await signInWithEmailAndPassword(window.auth, email, password);
+        window.showMessage('Đăng nhập thành công!', 'success');
         loginErrorMessage.classList.add('hidden');
-        closeModal(loginRegisterModal); // Close the login modal after successful login
+        window.closeModal(loginRegisterModal);
     } catch (error) {
         console.error("Error during login:", error);
         loginErrorMessage.textContent = `Lỗi đăng nhập: ${error.message}`;
         loginErrorMessage.classList.remove('hidden');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 });
 
 async function logoutUser() {
-    showLoading();
+    window.showLoading();
     try {
-        await signOut(auth);
-        showMessage('Đã đăng xuất.', 'info');
-        // No anonymous sign-in after logout as per new requirement
+        await signOut(window.auth);
+        window.showMessage('Đã đăng xuất.', 'info');
     } catch (error) {
         console.error("Error during logout:", error);
-        showMessage(`Lỗi đăng xuất: ${error.message}`, 'error');
+        window.showMessage(`Lỗi đăng xuất: ${error.message}`, 'error');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 }
 
 async function renderProfileModal() {
-    if (loggedInUser) {
-        profileUsernameInput.value = loggedInUser.username || '';
-        profileFullnameInput.value = loggedInUser.fullname || '';
-        profilePhoneInput.value = loggedInUser.phone || '';
-        profileProvinceInput.value = loggedInUser.province || '';
+    if (window.loggedInUser) {
+        profileUsernameInput.value = window.loggedInUser.username || '';
+        profileFullnameInput.value = window.loggedInUser.fullname || '';
+        profilePhoneInput.value = window.loggedInUser.phone || '';
+        profileProvinceInput.value = window.loggedInUser.province || '';
     }
 }
 
 saveProfileBtn.addEventListener('click', async () => {
-    if (!loggedInUser || !loggedInUser.id) { // Check if user is truly not logged in (id is null for guest)
-        showMessage('Vui lòng đăng nhập để lưu hồ sơ.', 'info');
-        openModal(loginRegisterModal); // Show login modal
+    if (!window.loggedInUser || !window.loggedInUser.id) {
+        window.showMessage('Vui lòng đăng nhập để lưu hồ sơ.', 'info');
+        window.openModal(loginRegisterModal);
         return;
     }
-    showLoading();
+    window.showLoading();
     try {
-        const profileRef = doc(db, `artifacts/${appId}/users/${loggedInUser.id}`);
+        const profileRef = doc(window.db, `artifacts/${appId}/users/${window.loggedInUser.id}`);
         await updateDoc(profileRef, {
             fullname: profileFullnameInput.value.trim(),
             phone: profilePhoneInput.value.trim(),
             province: profileProvinceInput.value.trim()
         });
-        loggedInUser.fullname = profileFullnameInput.value.trim();
-        loggedInUser.phone = profilePhoneInput.value.trim();
-        loggedInUser.province = profileProvinceInput.value.trim();
-        showMessage('Hồ sơ đã được cập nhật!', 'success');
+        window.loggedInUser.fullname = profileFullnameInput.value.trim();
+        window.loggedInUser.phone = profilePhoneInput.value.trim();
+        window.loggedInUser.province = profileProvinceInput.value.trim();
+        window.showMessage('Hồ sơ đã được cập nhật!', 'success');
         console.log("User profile updated.");
     } catch (error) {
         console.error("Error updating user profile:", error);
         profileErrorMessage.textContent = `Lỗi cập nhật hồ sơ: ${error.message}`;
         profileErrorMessage.classList.remove('hidden');
     } finally {
-        hideLoading();
+        window.hideLoading();
     }
 });
 
 async function saveUserCart() {
-    if (loggedInUser && currentUserId) {
-        showLoading();
+    if (window.loggedInUser && window.currentUserId) {
+        window.showLoading();
         try {
-            await setDoc(doc(collection(db, `artifacts/${appId}/users/${currentUserId}/cart`), 'currentCart'), { items: userCartCache });
+            await setDoc(doc(collection(window.db, `artifacts/${appId}/users/${window.currentUserId}/cart`), 'currentCart'), { items: window.userCartCache });
             console.log("User cart saved.");
         } catch (error) {
             console.error("Error saving cart:", error);
-            showMessage("Lỗi lưu giỏ hàng.", "error");
+            window.showMessage("Lỗi lưu giỏ hàng.", "error");
         } finally {
-            hideLoading();
+            window.hideLoading();
         }
     }
 }
 
 async function updateCartCount() {
-    if (loggedInUser && currentUserId) {
+    if (window.loggedInUser && window.currentUserId) {
         try {
-            const cartDocSnap = await getDoc(doc(collection(db, `artifacts/${appId}/users/${currentUserId}/cart`), 'currentCart'));
+            const cartDocSnap = await getDoc(doc(collection(window.db, `artifacts/${appId}/users/${window.currentUserId}/cart`), 'currentCart'));
             if (cartDocSnap.exists()) {
-                userCartCache = cartDocSnap.data().items || [];
-                const totalItems = userCartCache.reduce((sum, item) => sum + item.quantity, 0);
+                window.userCartCache = cartDocSnap.data().items || [];
+                const totalItems = window.userCartCache.reduce((sum, item) => sum + item.quantity, 0);
                 cartCountSpan.textContent = totalItems;
             } else {
-                userCartCache = [];
+                window.userCartCache = [];
                 cartCountSpan.textContent = 0;
             }
         } catch (error) {
@@ -2809,19 +3079,17 @@ async function updateCartCount() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // No automatic sign-in on page load.
-    // Instead, just load shop data and display products.
     loadShopData();
     showSection('product-list-section', showProductsBtn);
-    updateAuthUI(); // Initialize UI based on current (logged out) state
+    updateAuthUI();
 });
 
 document.getElementById('open-address-in-map-btn').addEventListener('click', () => {
-    const address = shopDataCache.address;
+    const address = window.shopDataCache.address;
     if (address && address !== 'Chưa cập nhật') {
         const encodedAddress = encodeURIComponent(address);
         window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank');
     } else {
-        showMessage('Vui lòng cập nhật địa chỉ cửa hàng trong cài đặt trước.', 'info');
+        window.showMessage('Vui lòng cập nhật địa chỉ cửa hàng trong cài đặt trước.', 'info');
     }
 });
