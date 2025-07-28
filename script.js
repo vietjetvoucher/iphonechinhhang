@@ -537,9 +537,9 @@ async function loadShopSettingsToUI() {
     bankNameInput.value = shopDataCache.bankDetails.bankName || '';
     accountNumberInput.value = shopDataCache.bankDetails.accountNumber || '';
     accountHolderInput.value = shopDataCache.bankDetails.accountHolder || '';
-    qrCodeImageURLInput.value = qrCodeImageURLInput ? qrCodeImageURLInput.value.trim() : '';
-    shippingUnitNameInput.value = shippingUnitNameInput ? shippingUnitNameInput.value.trim() : '';
-    shippingUnitImageURLInput.value = shippingUnitImageURLInput ? shippingUnitImageURLInput.value.trim() : '';
+    qrCodeImageURLInput.value = shopDataCache.bankDetails.qrCodeImage || '';
+    shippingUnitNameInput.value = shopDataCache.shippingUnit.name || 'GHN Express';
+    shippingUnitImageURLInput.value = shopDataCache.shippingUnit.image || '';
     // Đảm bảo rằng adminEmailInput tồn tại trước khi truy cập .value
     if (adminEmailInput) {
         adminEmailInput.value = shopDataCache.adminEmail || ''; // Load admin email
@@ -1413,7 +1413,8 @@ orderForm.addEventListener('submit', async (e) => {
         vatPaymentStatus: 'pending',
         warrantyPackage: null,
         warrantyPaymentStatus: 'pending',
-        appliedVoucherCode: currentAppliedVoucher ? currentAppliedVoucher.code : null // Store the applied voucher code
+        appliedVoucherCode: currentAppliedVoucher ? currentAppliedVoucher.code : null, // Store the applied voucher code
+        appliedVoucherDisplayValue: currentAppliedVoucher ? currentAppliedVoucher.displayValue : null // Store the display value
     };
 
     try {
@@ -1543,7 +1544,7 @@ async function renderOrders(status) {
                     <p class="text-gray-700 mb-2"><strong>VAT (Shop đã thanh toán cho khách 8%) :</strong> ${formatCurrency(order.totalShopSupportVAT)}</p>
                     <p class="text-gray-700 mb-2"><strong>Gói bảo hành:</strong> ${order.warrantyPackage ? `${order.warrantyPackage.name} (${formatCurrency(order.warrantyPackage.price - (order.warrantyPackage.price * order.warrantyPackage.discount / 100))})` : 'Chưa đăng ký'}</p>
                     <p class="text-gray-700 mb-4"><strong>Trạng thái bảo hành:</strong> ${order.warrantyPackage ? (order.warrantyPaymentStatus === 'paid' ? 'Đã thanh toán' : (order.warrantyPaymentStatus === 'pending_admin' ? 'Đang xác nhận thanh toán' : 'Chờ xác nhận')) : 'Miễn phí đổi trả trong 30 ngày'}</p>
-                    ${order.appliedVoucherCode ? `<p class="text-gray-700 mb-2"><strong>Voucher đã dùng:</strong> ${order.appliedVoucherCode}</p>` : ''}
+                    ${order.appliedVoucherCode ? `<p class="text-gray-700 mb-2"><strong>Voucher đã dùng:</strong> ${order.appliedVoucherCode} ${order.appliedVoucherDisplayValue ? `(${order.appliedVoucherDisplayValue})` : ''}</p>` : ''}
                     <!-- Updated: Display "Thanh toán khi nhận hàng" with the total order amount for all statuses -->
                     <p class="text-red-600 font-bold mb-2">Thanh toán khi nhận hàng: ${formatCurrency(order.totalAmount - order.totalVATCustomerPays)}</p>
 
@@ -2145,22 +2146,75 @@ async function renderVouchersList() {
         currentVouchersList.innerHTML = '<p class="text-gray-500 italic">Chưa có voucher nào.</p>';
         return;
     }
-    vouchers.forEach(([code, voucherData]) => {
-        const voucherDiv = document.createElement('div');
-        voucherDiv.className = 'flex items-center justify-between bg-gray-100 p-3 rounded-lg shadow-sm';
-        const expiryDate = new Date(voucherData.expiry);
-        const now = new Date();
-        const isExpired = expiryDate <= now;
-        const expiryText = isExpired ? 'Đã hết hạn' : `Hết hạn: ${expiryDate.toLocaleString('vi-VN')}`;
-        const expiryColorClass = isExpired ? 'text-red-500' : 'text-green-600';
-        const isAdminVoucherTag = voucherData.isAdminVoucher ? '<span class="ml-2 px-2 py-1 bg-indigo-200 text-indigo-800 rounded-full text-xs font-semibold">Admin</span>' : '';
 
-        voucherDiv.innerHTML = `
-            <p class="font-semibold text-gray-900">${code}: ${voucherData.displayValue} <span class="${expiryColorClass}">(${expiryText})</span> ${isAdminVoucherTag}</p>
-            <button class="delete-voucher-btn bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg transition-all duration-200" data-voucher-code="${code}">Xóa</button>
-        `;
-        currentVouchersList.appendChild(voucherDiv);
-    });
+    const userVouchers = vouchers.filter(([, voucherData]) => !voucherData.isAdminVoucher);
+    const adminVouchers = vouchers.filter(([, voucherData]) => voucherData.isAdminVoucher);
+
+    // Create User Vouchers List
+    const userVoucherSection = document.createElement('div');
+    userVoucherSection.innerHTML = `
+        <h4 class="text-xl font-semibold mb-3 text-gray-800">Voucher Người Dùng</h4>
+        <div id="user-vouchers-sublist" class="space-y-2"></div>
+    `;
+    currentVouchersList.appendChild(userVoucherSection);
+    const userVouchersSublist = userVoucherSection.querySelector('#user-vouchers-sublist');
+
+    if (userVouchers.length === 0) {
+        userVouchersSublist.innerHTML = '<p class="text-gray-500 italic">Chưa có voucher người dùng nào.</p>';
+    } else {
+        userVouchers.forEach(([code, voucherData]) => {
+            const voucherDiv = document.createElement('div');
+            voucherDiv.className = 'flex items-center justify-between bg-gray-100 p-3 rounded-lg shadow-sm';
+            const expiryDate = new Date(voucherData.expiry);
+            const now = new Date();
+            const isExpired = expiryDate <= now;
+            const expiryText = isExpired ? 'Đã hết hạn' : `Hết hạn: ${expiryDate.toLocaleString('vi-VN')}`;
+            const expiryColorClass = isExpired ? 'text-red-500' : 'text-green-600';
+
+            voucherDiv.innerHTML = `
+                <p class="font-semibold text-gray-900">${code}: ${voucherData.displayValue} <span class="${expiryColorClass}">(${expiryText})</span></p>
+                <div class="flex space-x-2">
+                    <button class="copy-voucher-btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded-lg transition-all duration-200" data-voucher-code="${code}">Sao chép</button>
+                    <button class="delete-voucher-btn bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded-lg transition-all duration-200" data-voucher-code="${code}">Xóa</button>
+                </div>
+            `;
+            userVouchersSublist.appendChild(voucherDiv);
+        });
+    }
+
+    // Create Admin Vouchers List
+    const adminVoucherSection = document.createElement('div');
+    adminVoucherSection.classList.add('mt-6'); // Add some top margin for separation
+    adminVoucherSection.innerHTML = `
+        <h4 class="text-xl font-semibold mb-3 text-gray-800">Voucher Admin</h4>
+        <div id="admin-vouchers-sublist" class="space-y-2"></div>
+    `;
+    currentVouchersList.appendChild(adminVoucherSection);
+    const adminVouchersSublist = adminVoucherSection.querySelector('#admin-vouchers-sublist');
+
+    if (adminVouchers.length === 0) {
+        adminVouchersSublist.innerHTML = '<p class="text-gray-500 italic">Chưa có voucher admin nào.</p>';
+    } else {
+        adminVouchers.forEach(([code, voucherData]) => {
+            const voucherDiv = document.createElement('div');
+            voucherDiv.className = 'flex items-center justify-between bg-gray-100 p-3 rounded-lg shadow-sm';
+            const expiryDate = new Date(voucherData.expiry);
+            const now = new Date();
+            const isExpired = expiryDate <= now;
+            const expiryText = isExpired ? 'Đã hết hạn' : `Hết hạn: ${expiryDate.toLocaleString('vi-VN')}`;
+            const expiryColorClass = isExpired ? 'text-red-500' : 'text-green-600';
+
+            voucherDiv.innerHTML = `
+                <p class="font-semibold text-gray-900">${code}: ${voucherData.displayValue} <span class="${expiryColorClass}">(${expiryText})</span></p>
+                <div class="flex space-x-2">
+                    <button class="copy-voucher-btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded-lg transition-all duration-200" data-voucher-code="${code}">Sao chép</button>
+                    <button class="delete-voucher-btn bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded-lg transition-all duration-200" data-voucher-code="${code}">Xóa</button>
+                </div>
+            `;
+            adminVouchersSublist.appendChild(voucherDiv);
+        });
+    }
+
 
     document.querySelectorAll('.delete-voucher-btn').forEach(button => {
         button.addEventListener('click', async (e) => {
@@ -2172,6 +2226,18 @@ async function renderVouchersList() {
             if (confirm('Bạn có chắc chắn muốn xóa voucher này?')) {
                 await deleteVoucher(voucherCode);
             }
+        });
+    });
+
+    document.querySelectorAll('.copy-voucher-btn').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const voucherCode = e.target.dataset.voucherCode;
+            navigator.clipboard.writeText(voucherCode).then(() => {
+                showNotification(`Đã sao chép mã voucher "${voucherCode}" vào clipboard!`, 'success');
+            }).catch(err => {
+                console.error('Không thể sao chép văn bản: ', err);
+                showNotification('Không thể sao chép mã voucher. Vui lòng thử lại.', 'error');
+            });
         });
     });
 }
@@ -2926,7 +2992,7 @@ onAuthStateChanged(auth, async (user) => {
                 const isUserAdmin = (user.email === shopDataCache.adminEmail);
                 loggedInUser = {
                     id: currentUserId,
-                    username: user.email || `guest_${currentUserId.substring(0, 8)}`,
+                    username: user.email || `guest_${currentUserId.substring(0, 8)}}`,
                     fullname: '',
                     phone: '',
                     province: '',
