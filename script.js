@@ -1,3 +1,7 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
 // Global variables provided by the Canvas environment
 // __app_id: The unique ID for the current application instance.
 // __firebase_config: Firebase configuration object (JSON string) for initializing the app.
@@ -533,9 +537,9 @@ async function loadShopSettingsToUI() {
     bankNameInput.value = shopDataCache.bankDetails.bankName || '';
     accountNumberInput.value = shopDataCache.bankDetails.accountNumber || '';
     accountHolderInput.value = shopDataCache.bankDetails.accountHolder || '';
-    qrCodeImageURLInput.value = shopDataCache.bankDetails.qrCodeImage || '';
-    shippingUnitNameInput.value = shopDataCache.shippingUnit.name || 'GHN Express';
-    shippingUnitImageURLInput.value = shopDataCache.shippingUnit.image || '';
+    qrCodeImageURLInput.value = qrCodeImageURLInput ? qrCodeImageURLInput.value.trim() : '';
+    shippingUnitNameInput.value = shippingUnitNameInput ? shippingUnitNameInput.value.trim() : '';
+    shippingUnitImageURLInput.value = shippingUnitImageURLInput ? shippingUnitImageURLInput.value.trim() : '';
     // Đảm bảo rằng adminEmailInput tồn tại trước khi truy cập .value
     if (adminEmailInput) {
         adminEmailInput.value = shopDataCache.adminEmail || ''; // Load admin email
