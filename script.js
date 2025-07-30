@@ -9,13 +9,13 @@ import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, onSnap
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
     // User's provided Firebase configuration for local testing
-    apiKey: "AIzaSyBPjpG1V3HpR4wCFEXth1byWN0q9-9jWiM",
-    authDomain: "hhmobile-df259.firebaseapp.com",
-    projectId: "hhmobile-df259",
-    storageBucket: "hhmobile-df259.firebaseapp.com",
-    messagingSenderId: "273294651647",
-    appId: "1:273294651647:web:02bcd7be6f760cd6849cca",
-    measurementId: "G-YSJ062B717"
+    apiKey: "AIzaSyAJmYFnLAhskjszeK5DZve4z0wRXrXl7Sc",
+    authDomain: "iphonechinhhang-47bdd.firebaseapp.com",
+    projectId: "iphonechinhhang-47bdd",
+    storageBucket: "iphonechinhhang-47bdd.firebasestorage.app",
+    messagingSenderId: "308005027963",
+    appId: "1:308005027963:web:35afe47c3ace690e38e2de",
+    measurementId: "G-PQ7450T99T"
 };
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; // Corrected variable name
 
@@ -322,7 +322,7 @@ const clearSearchCreatedOrdersBtn = document.getElementById('clear-search-create
 const searchShippingOrdersInput = document.getElementById('search-shipping-orders');
 const clearSearchShippingOrdersBtn = document.getElementById('clear-search-shipping-orders');
 const searchDeliveredOrdersInput = document.getElementById('search-delivered-orders');
-const clearSearchDeliveredOrdersBtn = document.getElementById('clear-search-delivered-btn');
+const clearSearchDeliveredOrdersBtn = document.getElementById('clear-search-delivered-orders');
 
 
 let currentSelectedProduct = null;
@@ -442,46 +442,46 @@ async function loadShopData() {
                 console.log("Default shop data saved to Firestore.");
             }
 
-            // Removed the default product creation logic
-            // if (!shopDataCache.products || shopDataCache.products.length === 0) {
-            //     const defaultProduct = {
-            //         id: generateId(),
-            //         name: 'iPhone 16 Pro Max',
-            //         basePrice: 30000000,
-            //         image: 'https://placehold.co/400x300/cccccc/333333?text=iPhone+16+Pro+Max',
-            //         description: 'iPhone 16 Pro Max là siêu phẩm mới nhất của Apple, với chip A18 Bionic mạnh mẽ, camera cải tiến vượt trội và màn hình ProMotion siêu mượt.',
-            //         reviewsCount: 500,
-            //         colors: [
-            //             { name: 'Titan Tự Nhiên', priceImpact: 0, display_image: 'https://placehold.co/400x300/8B8B8B/ffffff?text=Titan+Tự+Nhiên' },
-            //             { name: 'Titan Xanh', priceImpact: 500000, display_image: 'https://placehold.co/400x300/00008B/ffffff?text=Titan+Xanh' },
-            //             { name: 'Titan Trắng', priceImpact: 500000, display_image: 'https://placehold.co/400x300/F0F8FF/333333?text=Titan+Trắng' },
-            //             { name: 'Titan Đen', priceImpact: 0, display_image: 'https://placehold.co/400x300/2C3539/ffffff?text=Titan+Đen' }
-            //         ],
-            //         storages: [
-            //             { name: '256GB', priceImpact: 0 },
-            //             { name: '512GB', priceImpact: 3000000 },
-            //             { name: '1TB', priceImpact: 7000000 }
-            //         ],
-            //         variants: [
-            //             { color: 'Titan Tự Nhiên', storage: '256GB', quantity: 100, priceImpact: 0, sold: 20 },
-            //             { color: 'Titan Tự Nhiên', storage: '512GB', quantity: 70, priceImpact: 0, sold: 15 },
-            //             { color: 'Titan Tự Nhiên', storage: '1TB', quantity: 30, priceImpact: 0, sold: 5 },
-            //             { color: 'Titan Xanh', storage: '256GB', quantity: 80, priceImpact: 0, sold: 10 },
-            //             { color: 'Titan Xanh', storage: '512GB', quantity: 50, priceImpact: 0, sold: 8 },
-            //             { color: 'Titan Xanh', storage: '1TB', quantity: 20, priceImpact: 0, sold: 3 },
-            //             { color: 'Titan Trắng', storage: '256GB', quantity: 90, priceImpact: 0, sold: 18 },
-            //             { color: 'Titan Trắng', storage: '512GB', quantity: 60, priceImpact: 0, sold: 12 },
-            //             { color: 'Titan Trắng', storage: '1TB', quantity: 25, priceImpact: 0, sold: 4 },
-            //             { color: 'Titan Đen', storage: '256GB', quantity: 95, priceImpact: 0, sold: 22 },
-            //             { color: 'Titan Đen', storage: '512GB', quantity: 65, priceImpact: 0, sold: 10 },
-            //             { color: 'Titan Đen', storage: '1TB', quantity: 28, priceImpact: 0, sold: 6 }
-            //         ]
-            //     };
-            //     shopDataCache.products = [defaultProduct];
-            //     await setDoc(shopDocRef, shopDataCache); // Save the default product to Firestore
-            //     showNotification('Đã tạo sản phẩm mặc định iPhone 16 Pro Max.', 'info');
-            //     console.log("Default iPhone 16 Pro Max product added and saved.");
-            // }
+            // Check if products array is empty and add a default product if it is
+            if (!shopDataCache.products || shopDataCache.products.length === 0) {
+                const defaultProduct = {
+                    id: generateId(),
+                    name: 'iPhone 16 Pro Max',
+                    basePrice: 30000000,
+                    image: 'https://placehold.co/400x300/cccccc/333333?text=iPhone+16+Pro+Max',
+                    description: 'iPhone 16 Pro Max là siêu phẩm mới nhất của Apple, với chip A18 Bionic mạnh mẽ, camera cải tiến vượt trội và màn hình ProMotion siêu mượt.',
+                    reviewsCount: 500,
+                    colors: [
+                        { name: 'Titan Tự Nhiên', priceImpact: 0, display_image: 'https://placehold.co/400x300/8B8B8B/ffffff?text=Titan+Tự+Nhiên' },
+                        { name: 'Titan Xanh', priceImpact: 500000, display_image: 'https://placehold.co/400x300/00008B/ffffff?text=Titan+Xanh' },
+                        { name: 'Titan Trắng', priceImpact: 500000, display_image: 'https://placehold.co/400x300/F0F8FF/333333?text=Titan+Trắng' },
+                        { name: 'Titan Đen', priceImpact: 0, display_image: 'https://placehold.co/400x300/2C3539/ffffff?text=Titan+Đen' }
+                    ],
+                    storages: [
+                        { name: '256GB', priceImpact: 0 },
+                        { name: '512GB', priceImpact: 3000000 },
+                        { name: '1TB', priceImpact: 7000000 }
+                    ],
+                    variants: [
+                        { color: 'Titan Tự Nhiên', storage: '256GB', quantity: 100, priceImpact: 0, sold: 20 },
+                        { color: 'Titan Tự Nhiên', storage: '512GB', quantity: 70, priceImpact: 0, sold: 15 },
+                        { color: 'Titan Tự Nhiên', storage: '1TB', quantity: 30, priceImpact: 0, sold: 5 },
+                        { color: 'Titan Xanh', storage: '256GB', quantity: 80, priceImpact: 0, sold: 10 },
+                        { color: 'Titan Xanh', storage: '512GB', quantity: 50, priceImpact: 0, sold: 8 },
+                        { color: 'Titan Xanh', storage: '1TB', quantity: 20, priceImpact: 0, sold: 3 },
+                        { color: 'Titan Trắng', storage: '256GB', quantity: 90, priceImpact: 0, sold: 18 },
+                        { color: 'Titan Trắng', storage: '512GB', quantity: 60, priceImpact: 0, sold: 12 },
+                        { color: 'Titan Trắng', storage: '1TB', quantity: 25, priceImpact: 0, sold: 4 },
+                        { color: 'Titan Đen', storage: '256GB', quantity: 95, priceImpact: 0, sold: 22 },
+                        { color: 'Titan Đen', storage: '512GB', quantity: 65, priceImpact: 0, sold: 10 },
+                        { color: 'Titan Đen', storage: '1TB', quantity: 28, priceImpact: 0, sold: 6 }
+                    ]
+                };
+                shopDataCache.products = [defaultProduct];
+                await setDoc(shopDocRef, shopDataCache); // Save the default product to Firestore
+                showNotification('Đã tạo sản phẩm mặc định iPhone 16 Pro Max.', 'info');
+                console.log("Default iPhone 16 Pro Max product added and saved.");
+            }
 
             loadShopSettingsToUI();
             renderProducts();
@@ -1934,7 +1934,6 @@ function resetAddEditProductForm() {
     newProductImageInput.value = '';
     newProductDescriptionInput.value = '';
     newProductReviewsInput.value = '0';
-    newProductCategoryInput.value = ''; // Reset category input
     colorOptionsContainer.innerHTML = '';
     storageOptionsContainer.innerHTML = '';
     variantsContainer.innerHTML = '';
@@ -1980,7 +1979,6 @@ addEditProductForm.addEventListener('submit', async (e) => {
     const image = newProductImageInput.value.trim();
     const description = newProductDescriptionInput.value.trim();
     const reviewsCount = parseInt(newProductReviewsInput.value);
-    const category = newProductCategoryInput.value.trim(); // Get category value
 
     const colors = [];
     colorOptionsContainer.querySelectorAll('.color-option-item').forEach(item => {
@@ -2013,7 +2011,6 @@ addEditProductForm.addEventListener('submit', async (e) => {
         image,
         description,
         reviewsCount,
-        category, // Add category to product object
         colors,
         storages,
         variants
@@ -2054,7 +2051,6 @@ async function editProduct(productId) {
     newProductImageInput.value = product.image;
     newProductDescriptionInput.value = product.description;
     newProductReviewsInput.value = product.reviewsCount;
-    newProductCategoryInput.value = product.category || ''; // Set category value
 
     colorOptionsContainer.innerHTML = '';
     product.colors.forEach(color => addColorOption(color.name, color.priceImpact, color.display_image));
@@ -3275,85 +3271,20 @@ async function updateCartCount() {
     }
 }
 
-// Moved this block inside DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
     // No automatic sign-in on page load.
     // Instead, just load shop data and display products.
     loadShopData();
     showSection('product-list-section', showProductsBtn);
     updateAuthUI(); // Initialize UI based on current (logged out) state
-
-    // Existing event listener for open-address-in-map-btn
-    const openAddressInMapBtn = document.getElementById('open-address-in-map-btn');
-    if (openAddressInMapBtn) { // Add a null check for safety
-        openAddressInMapBtn.addEventListener('click', () => {
-            const address = shopDataCache.address;
-            if (address && address !== 'Chưa cập nhật') {
-                const encodedAddress = encodeURIComponent(address);
-                window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank');
-            } else {
-                showNotification('Vui lòng cập nhật địa chỉ cửa hàng trong cài đặt trước.', 'info');
-            }
-        });
-    }
-
-    // Category Buttons event listeners
-    const categoryButtons = document.querySelectorAll('.category-btn');
-    categoryButtons.forEach(button => {
-        button.addEventListener('click', (e) => {
-            const category = e.currentTarget.dataset.category;
-            // Remove active class from all category buttons
-            categoryButtons.forEach(btn => btn.classList.remove('active-category'));
-            // Add active class to the clicked button
-            e.currentTarget.classList.add('active-category');
-            
-            if (category === 'All') {
-                renderProducts(); // Show all products
-            } else {
-                renderProductsByCategory(category);
-            }
-        });
-    });
-
-    // Initialize the "Tất cả" button as active on page load
-    const allCategoryButton = document.querySelector('.category-btn[data-category="All"]');
-    if (allCategoryButton) {
-        allCategoryButton.classList.add('active-category');
-    }
 });
 
-// New function to render products by category
-function renderProductsByCategory(category) {
-    const productGrid = document.getElementById('product-grid');
-    productGrid.innerHTML = '';
-    const filteredProducts = shopDataCache.products.filter(product =>
-        product.category === category
-    );
-
-    if (filteredProducts.length === 0) {
-        productGrid.innerHTML = `<p class="text-gray-500 italic text-center col-span-full">Không tìm thấy sản phẩm nào trong danh mục "${category}".</p>`;
-        return;
+document.getElementById('open-address-in-map-btn').addEventListener('click', () => {
+    const address = shopDataCache.address;
+    if (address && address !== 'Chưa cập nhật') {
+        const encodedAddress = encodeURIComponent(address);
+        window.open(`https://www.google.com/maps/search/?api=1&query=${encodedAddress}`, '_blank');
+    } else {
+        showNotification('Vui lòng cập nhật địa chỉ cửa hàng trong cài đặt trước.', 'info');
     }
-
-    filteredProducts.forEach(product => {
-        productGrid.appendChild(renderProductCard(product));
-    });
-
-    document.querySelectorAll('.view-product-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
-            const productId = e.target.dataset.productId;
-            const product = shopDataCache.products.find(p => p.id === productId);
-            if (product) {
-                if (!loggedInUser || !loggedInUser.id) {
-                    showNotification('Vui lòng đăng nhập để xem chi tiết sản phẩm.', 'info');
-                    openModal(loginRegisterModal);
-                    return;
-                }
-                displayProductDetail(product);
-            }
-        });
-    });
-}
-
-// Get the new-product-category input element
-const newProductCategoryInput = document.getElementById('new-product-category');
+});
